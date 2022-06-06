@@ -13,6 +13,7 @@ path = "src/main.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+dirs = "4"
 rand = "0.8"
 chrono = { version = "0.4", features = ["wasmbind"] }
 eframe = { version = "0.18", features = ["persistence"] }
