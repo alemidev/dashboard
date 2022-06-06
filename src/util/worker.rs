@@ -1,4 +1,4 @@
-use tokio::{runtime::Runtime, sync::oneshot::Sender};
+use tokio::{runtime::{Handle, Runtime, Builder}, sync::oneshot::Sender, time::{sleep, Duration}};
 
 pub(crate) trait BackgroundWorker {
 	fn start() -> Self;  // TODO make it return an error? Can we even do anything without a background worker
@@ -7,24 +7,31 @@ pub(crate) trait BackgroundWorker {
 }
 
 pub(crate) struct NativeBackgroundWorker {
-	runtime : Runtime,
-	end_tx : Sender<bool>,
+	runtime : Handle,
+	// end_tx : Sender<bool>,
 	worker : std::thread::JoinHandle<bool>,
 }
 
 impl BackgroundWorker for NativeBackgroundWorker {
 	fn start() -> Self {
-		let runtime = Runtime::new().expect("Failed creating Tokio runtime");
-		let (end_tx, end_rx) = tokio::sync::oneshot::channel::<bool>();
-		let r_handle = runtime.handle().clone();
-		let worker = std::thread::spawn(move ||{
-			r_handle.block_on(async {
-				end_rx.await.expect("Error shutting down")
+		let (rt_tx, rt_rx) = tokio::sync::oneshot::channel::<Handle>();
+		let worker = std::thread::spawn(|| {
+			let runtime = Builder::new_multi_thread()
+				.worker_threads(1)
+				.enable_all()
+				.build()
+				.unwrap();
+			rt_tx.send(runtime.handle().clone()).unwrap();
+			runtime.block_on(async {
+				loop {
+		 			println!("keepalive loop");
+		 			sleep(Duration::from_secs(1)).await;
+				}
 			})
 		});
 		NativeBackgroundWorker {
-			runtime : runtime,
-			end_tx : end_tx,
+			runtime : rt_rx.blocking_recv().unwrap(),
+			// end_tx : end_tx,
 			worker : worker,
 		}
 	}
@@ -34,7 +41,7 @@ impl BackgroundWorker for NativeBackgroundWorker {
 	}
 
 	fn stop(self) {
-		self.end_tx.send(true).expect("Failed signaling termination");
-		self.worker.join().expect("Failed joining main worker thread");
+		// self.end_tx.send(true).expect("Failed signaling termination");
+		// self.worker.join().expect("Failed joining main worker thread");
 	}
 }
