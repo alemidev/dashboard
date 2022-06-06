@@ -65,7 +65,7 @@ impl BackgroundWorker for NativeBackgroundWorker {
 							let url = sources[j].url.clone();
 							let query_x = sources[j].query_x.clone();
 							let query_y = sources[j].query_y.clone();
-							std::thread::spawn(move || {
+							std::thread::spawn(move || { // TODO this can overspawn if a request takes longer than the refresh interval!
 								let v = fetch(url.as_str(), query_x.as_str(), query_y.as_str()).unwrap();
 								let store = state2.storage.lock().unwrap();
 								store.put_value(p_id, s_id, v).unwrap();
