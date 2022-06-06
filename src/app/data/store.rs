@@ -1,10 +1,8 @@
 use crate::app::data::{Panel, Source};
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use eframe::egui::plot::Value;
 use rusqlite::{params, Connection};
-use std::sync::{Arc, RwLock};
-
-use super::FetchError;
+use std::sync::RwLock;
 
 pub trait DataStorage {
 	fn add_panel(&self, name: &str);
@@ -106,7 +104,7 @@ impl SQLiteDataStore {
 				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
 				query_y: row.get(5)?,
 				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
-				panel_id: row.get(6)?,
+				// panel_id: row.get(6)?,
 				data: RwLock::new(Vec::new()),
 			})
 		})?;
@@ -145,7 +143,7 @@ impl SQLiteDataStore {
 				interval: row.get(3)?,
 				query_x: row.get(4)?,
 				query_y: row.get(5)?,
-				panel_id: row.get(6)?,
+				// panel_id: row.get(6)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
 				data: RwLock::new(Vec::new()),
 			})
@@ -175,11 +173,9 @@ impl SQLiteDataStore {
 		)
 	}
 
-	pub fn delete_source(&self, id:i32) -> rusqlite::Result<usize> {
-		self.conn.execute("DELETE FROM sources WHERE id = ?", params![id])
-	}
-
-
+	// pub fn delete_source(&self, id:i32) -> rusqlite::Result<usize> {
+	// 	self.conn.execute("DELETE FROM sources WHERE id = ?", params![id])
+	// }
 
 	pub fn load_panels(&self) -> rusqlite::Result<Vec<Panel>> {
 		let mut panels: Vec<Panel> = Vec::new();
@@ -249,9 +245,9 @@ impl SQLiteDataStore {
 		)
 	}
 
-	pub fn delete_panel(&self, id:i32) -> rusqlite::Result<usize> {
-		self.conn.execute("DELETE FROM panels WHERE id = ?", params![id])
-	}
+	// pub fn delete_panel(&self, id:i32) -> rusqlite::Result<usize> {
+	// 	self.conn.execute("DELETE FROM panels WHERE id = ?", params![id])
+	// }
 
 
 

@@ -2,7 +2,7 @@
 pub mod store;
 
 use std::path::PathBuf;
-use std::sync::{RwLock, Mutex, Arc};
+use std::sync::{RwLock, Mutex};
 use std::num::ParseFloatError;
 use chrono::{DateTime, Utc};
 use eframe::egui::plot::{Values, Value};
@@ -98,7 +98,7 @@ pub struct Source {
 	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,
 	pub query_y: String,
 	// pub(crate) compiled_query_y: Arc<Mutex<jq_rs::JqProgram>>,
-	pub(crate) panel_id: i32,
+	// pub(crate) panel_id: i32,
 	pub(crate) data: RwLock<Vec<Value>>,
 }
 
@@ -112,6 +112,18 @@ impl Source {
 		Values::from_values(self.data.read().unwrap().clone())
 	}
 
+	pub fn values_filter(&self, min_x:f64) -> Values {
+		let mut values = self.data.read().unwrap().clone();
+		values.retain(|x| x.x > min_x);
+		Values::from_values(values)
+	}
+
+	// Not really useful since different data has different fetch rates
+	// pub fn values_limit(&self, size:usize) -> Values {
+	// 	let values = self.data.read().unwrap().clone(); 
+	// 	let min = if values.len() < size { 0 } else { values.len() - size };
+	// 	Values::from_values(values[min..values.len()].to_vec())
+	// }
 }
 
 pub fn fetch(url:&str, query_x:&str, query_y:&str) -> Result<Value, FetchError> {
