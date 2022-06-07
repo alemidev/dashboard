@@ -1,5 +1,6 @@
 pub mod data;
 pub mod worker;
+pub mod util;
 
 use std::sync::Arc;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -56,7 +57,7 @@ impl App {
 
 impl eframe::App for App {
 	fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-		egui::TopBottomPanel::top("??? wtf").show(ctx, |ui| {
+		egui::TopBottomPanel::top("heading").show(ctx, |ui| {
 			ui.horizontal(|ui| {
 				egui::widgets::global_dark_light_mode_switch(ui);
 				ui.heading("dashboard");
@@ -109,27 +110,46 @@ impl eframe::App for App {
 				});
 			});
 		});
+		egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
+			ui.horizontal(|ui|{
+				ui.label(self.data.file.to_str().unwrap());
+				ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+					ui.horizontal(|ui| {
+						ui.label(format!("v{}-{}", env!("CARGO_PKG_VERSION"), git_version::git_version!()));
+						ui.separator();
+						ui.hyperlink_to("<me@alemi.dev>", "mailto:me@alemi.dev");
+						ui.label("alemi");
+					});
+				});
+			});
+		});
 		egui::CentralPanel::default().show(ctx, |ui| {
 			egui::ScrollArea::vertical().show(ui, |ui| {
 				let mut panels = self.data.panels.write().unwrap(); // TODO only lock as write when editing
 				for panel in &mut *panels {
+					let mut sources = panel.sources.write().unwrap(); // TODO only lock as write when editing
 					ui.group(|ui| {
 						ui.vertical(|ui| {
 							ui.horizontal(|ui| {
 								ui.heading(panel.name.as_str());
 								ui.separator();
+								if !self.edit {
+									for source in &*sources {
+										ui.label(source.name.as_str());
+										ui.separator();
+									}
+								}
 								ui.checkbox(&mut panel.view_scroll, "autoscroll");
 								ui.checkbox(&mut panel.timeserie, "timeserie");
 								ui.separator();
 								if self.filter {
-									ui.add(egui::Slider::new(&mut panel.view_size, 1..=86400).text("samples"));
+									ui.add(egui::Slider::new(&mut panel.view_size, 1..=1440).text("samples"));
 									ui.separator();
 								}
 								ui.add(egui::Slider::new(&mut panel.height, 0..=500).text("height"));
 								ui.separator();
 							});
 
-							let mut sources = panel.sources.write().unwrap(); // TODO only lock as write when editing
 
 							if self.edit {
 								for source in &mut *sources {
@@ -147,11 +167,14 @@ impl eframe::App for App {
 							}
 
 							let mut p = Plot::new(format!("plot-{}", panel.name))
-								.height(panel.height as f32);
+								.height(panel.height as f32)
+								.allow_scroll(false);
 
 							if panel.view_scroll {
-								p = p.include_x(Utc::now().timestamp() as f64)
-									.include_x((Utc::now().timestamp() - panel.view_size as i64) as f64);
+								p = p.include_x(Utc::now().timestamp() as f64);
+								if self.filter {
+									p = p.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64);
+								}
 							}
 
 							if panel.timeserie {
@@ -168,7 +191,7 @@ impl eframe::App for App {
 							p.show(ui, |plot_ui| {
 								for source in &mut *sources {
 									if self.filter {
-										plot_ui.line(Line::new(source.values_filter((Utc::now().timestamp() - panel.view_size as i64) as f64)).name(source.name.as_str()));
+										plot_ui.line(Line::new(source.values_filter((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64)).name(source.name.as_str()));
 									} else {
 										plot_ui.line(Line::new(source.values()).name(source.name.as_str()));
 									}
