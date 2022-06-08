@@ -14,7 +14,8 @@ use self::store::SQLiteDataStore;
 pub enum FetchError {
 	UreqError(ureq::Error),
 	IoError(std::io::Error),
-	JqError(jq_rs::Error),
+	// JqError(jq_rs::Error),
+	JQLError(String),
 	RusqliteError(rusqlite::Error),
 	ParseFloatError(ParseFloatError),
 	NoPanelWithThatIdError,
@@ -26,8 +27,8 @@ impl From::<ureq::Error> for FetchError {
 impl From::<std::io::Error> for FetchError {
 	fn from(e: std::io::Error) -> Self { FetchError::IoError(e) }
 }
-impl From::<jq_rs::Error> for FetchError {
-	fn from(e: jq_rs::Error) -> Self { FetchError::JqError(e) }
+impl From::<String> for FetchError { // TODO wtf? why does JQL error as a String?
+	fn from(e: String) -> Self { FetchError::JQLError(e) }
 }
 impl From::<ParseFloatError> for FetchError {
 	fn from(e: ParseFloatError) -> Self { FetchError::ParseFloatError(e) }
@@ -128,14 +129,13 @@ impl Source {
 }
 
 pub fn fetch(url:&str, query_x:&str, query_y:&str) -> Result<Value, FetchError> {
-	let res = ureq::get(url).call()?;
-	let body = res.into_string()?;
+	let res = ureq::get(url).call()?.into_json()?;
 	let x : f64;
 	if query_x.len() > 0 {
-		x = jq_rs::compile(query_x)?.run(&body)?.trim().parse::<f64>()?; // TODO precompile and guard with a mutex
+		x = jql::walker(&res, query_x)?.as_f64().unwrap(); // TODO what if it's given to us as a string?
 	} else {
 		x = Utc::now().timestamp() as f64;
 	}
-	let y = jq_rs::compile(query_y)?.run(&body)?.trim().parse::<f64>()?;
+	let y = jql::walker(&res, query_y)?.as_f64().unwrap();
 	return Ok( Value { x, y } );
 }
