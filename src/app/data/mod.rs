@@ -6,6 +6,7 @@ use std::sync::{RwLock, Mutex};
 use std::num::ParseFloatError;
 use chrono::{DateTime, Utc};
 use eframe::egui::plot::{Values, Value};
+use eframe::epaint::Color32;
 
 use self::store::SQLiteDataStore;
 
@@ -64,8 +65,9 @@ impl ApplicationState {
 		Ok(())
 	}
 
-	pub fn add_source(&self, panel_id:i32, name:&str, url:&str, query_x:&str, query_y:&str) -> Result<(), FetchError> {
-		let source = self.storage.lock().expect("Storage Mutex poisoned").new_source(panel_id, name, url, query_x, query_y)?;
+	pub fn add_source(&self, panel_id:i32, name:&str, url:&str, query_x:&str, query_y:&str, color:Color32, visible:bool) -> Result<(), FetchError> {
+		let source = self.storage.lock().expect("Storage Mutex poisoned")
+			.new_source(panel_id, name, url, query_x, query_y, color, visible)?;
 		let panels = self.panels.read().expect("Panels RwLock poisoned");
 		for panel in &*panels {
 			if panel.id == panel_id {
@@ -97,6 +99,8 @@ pub struct Source {
 	pub name: String,
 	pub url: String,
 	pub interval: i32,
+	pub color: Color32,
+	pub visible: bool,
 	pub(crate) last_fetch: RwLock<DateTime<Utc>>,
 	pub query_x: String,
 	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,

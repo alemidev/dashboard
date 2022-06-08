@@ -5,7 +5,7 @@ pub mod util;
 use std::sync::Arc;
 use chrono::Utc;
 use eframe::egui;
-use eframe::egui::{plot::{Line, Plot}};
+use eframe::egui::{RichText, plot::{Line, Plot}, Color32};
 
 use self::data::ApplicationState;
 use self::worker::native_save;
@@ -18,6 +18,8 @@ struct InputBuffer {
 	interval: i32,
 	query_x: String,
 	query_y: String,
+	color: Color32,
+	visible: bool,
 	panel_id: i32,
 }
 
@@ -30,6 +32,8 @@ impl Default for InputBuffer {
 			interval: 60,
 			query_x: "".to_string(),
 			query_y: "".to_string(),
+			color: Color32::TRANSPARENT,
+			visible: true,
 			panel_id: 0,
 		}	
 	}
@@ -84,7 +88,9 @@ impl eframe::App for App {
 							}
 						}
 					);
+					ui.checkbox(&mut self.input.visible, "visible");
 					ui.add(egui::Slider::new(&mut self.input.interval, 1..=60));
+					ui.color_edit_button_srgba(&mut self.input.color);
 					if ui.button("add").clicked() {
 						self.data.add_source(
 							self.input.panel_id,
@@ -92,6 +98,8 @@ impl eframe::App for App {
 							self.input.url.as_str(),
 							self.input.query_x.as_str(),
 							self.input.query_y.as_str(),
+							self.input.color,
+							self.input.visible,
 						).unwrap();
 					}
 					ui.separator();
@@ -128,11 +136,19 @@ impl eframe::App for App {
 							ui.horizontal(|ui| {
 								ui.heading(panel.name.as_str());
 								ui.separator();
-								if !self.edit {
-									for source in &*sources {
-										ui.label(source.name.as_str());
-										ui.separator();
+								for source in &mut *sources {
+									if self.edit {
+										ui.checkbox(&mut source.visible, "");
 									}
+									if source.visible {
+										ui.label(
+											RichText::new(source.name.as_str())
+											.color(if source.color == Color32::TRANSPARENT { Color32::GRAY } else { source.color })
+										);
+									} else {
+										ui.label(RichText::new(source.name.as_str()).color(Color32::BLACK));
+									}
+									ui.separator();
 								}
 								ui.checkbox(&mut panel.view_scroll, "autoscroll");
 								ui.checkbox(&mut panel.timeserie, "timeserie");
@@ -150,11 +166,12 @@ impl eframe::App for App {
 								for source in &mut *sources {
 									ui.horizontal(|ui| {
 										ui.add(egui::Slider::new(&mut source.interval, 1..=60));
-										eframe::egui::TextEdit::singleline(&mut source.url).hint_text("url").desired_width(250.0).show(ui);
+										eframe::egui::TextEdit::singleline(&mut source.url).hint_text("url").desired_width(300.0).show(ui);
 										if !panel.timeserie {
-											eframe::egui::TextEdit::singleline(&mut source.query_x).hint_text("x").desired_width(25.0).show(ui);
+											eframe::egui::TextEdit::singleline(&mut source.query_x).hint_text("x").desired_width(50.0).show(ui);
 										}
-										eframe::egui::TextEdit::singleline(&mut source.query_y).hint_text("y").desired_width(25.0).show(ui);
+										eframe::egui::TextEdit::singleline(&mut source.query_y).hint_text("y").desired_width(50.0).show(ui);
+										ui.color_edit_button_srgba(&mut source.color);
 										ui.separator();
 										ui.label(source.name.as_str());
 									});
@@ -185,10 +202,13 @@ impl eframe::App for App {
 
 							p.show(ui, |plot_ui| {
 								for source in &mut *sources {
-									if self.filter {
-										plot_ui.line(Line::new(source.values_filter((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64)).name(source.name.as_str()));
-									} else {
-										plot_ui.line(Line::new(source.values()).name(source.name.as_str()));
+									if source.visible {
+										let line = if self.filter {
+											Line::new(source.values_filter((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64)).name(source.name.as_str())
+										} else {
+											Line::new(source.values()).name(source.name.as_str())
+										};
+										plot_ui.line(line.color(source.color));
 									}
 								}
 							});

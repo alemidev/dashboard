@@ -1,8 +1,9 @@
-use crate::app::data::{Panel, Source};
+use crate::app::{data::{Panel, Source}, util::repack_color};
 use chrono::{TimeZone, Utc};
-use eframe::egui::plot::Value;
+use eframe::egui::{Color32, plot::Value};
 use rusqlite::{params, Connection};
 use std::sync::RwLock;
+use crate::app::util::unpack_color;
 
 pub trait DataStorage {
 	fn add_panel(&self, name: &str);
@@ -19,12 +20,12 @@ impl SQLiteDataStore {
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS panels (
 				id INTEGER PRIMARY KEY,
-				name TEXT UNIQUE,
-				view_scroll BOOL,
-				view_size INT,
-				timeserie BOOL,
-				width INT,
-				height INT
+				name TEXT UNIQUE NOT NULL,
+				view_scroll BOOL NOT NULL,
+				view_size INT NOT NULL,
+				timeserie BOOL NOT NULL,
+				width INT NOT NULL,
+				height INT NOT NULL
 			);",
 			[],
 		)?;
@@ -32,12 +33,14 @@ impl SQLiteDataStore {
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS sources (
 				id INTEGER PRIMARY KEY,
-				name TEXT,
-				url TEXT,
-				interval INT,
-				query_x TEXT,
-				query_y TEXT,
-				panel_id INT
+				name TEXT NOT NULL,
+				url TEXT NOT NULL,
+				interval INT NOT NULL,
+				query_x TEXT NOT NULL,
+				query_y TEXT NOT NULL,
+				panel_id INT NOT NULL,
+				color INT NULL,
+				visible BOOL NOT NULL
 			);",
 			[],
 		)?;
@@ -45,10 +48,10 @@ impl SQLiteDataStore {
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS points (
 				id INTEGER PRIMARY KEY,
-				panel_id INT,
-				source_id INT,
-				x FLOAT,
-				y FLOAT
+				panel_id INT NOT NULL,
+				source_id INT NOT NULL,
+				x FLOAT NOT NULL,
+				y FLOAT NOT NULL
 			);",
 			[],
 		)?;
@@ -105,6 +108,8 @@ impl SQLiteDataStore {
 				query_y: row.get(5)?,
 				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
 				// panel_id: row.get(6)?,
+				color: unpack_color(row.get(7).unwrap_or(0)),
+				visible: row.get(8)?,
 				data: RwLock::new(Vec::new()),
 			})
 		})?;
@@ -127,10 +132,13 @@ impl SQLiteDataStore {
 		url: &str,
 		query_x: &str,
 		query_y: &str,
+		color: Color32,
+		visible: bool,
 	) -> rusqlite::Result<Source> {
+		let color_u32 : Option<u32> = if color == Color32::TRANSPARENT { None } else { Some(repack_color(color)) };
 		self.conn.execute(
-			"INSERT INTO sources(name, url, interval, query_x, query_y, panel_id) VALUES (?, ?, ?, ?, ?, ?)",
-			params![name, url, 60, query_x, query_y, panel_id],
+			"INSERT INTO sources(name, url, interval, query_x, query_y, panel_id, color, visible) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			params![name, url, 60i32, query_x, query_y, panel_id, color_u32, visible],
 		)?;
 		let mut statement = self
 			.conn
@@ -141,17 +149,19 @@ impl SQLiteDataStore {
 				name: row.get(1)?,
 				url: row.get(2)?,
 				interval: row.get(3)?,
-				query_x: row.get(4)?,
-				query_y: row.get(5)?,
-				// panel_id: row.get(6)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
+				query_x: row.get(4)?,
+				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
+				query_y: row.get(5)?,
+				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
+				// panel_id: row.get(6)?,
+				color: unpack_color(row.get(7).unwrap_or(0)),
+				visible: row.get(8)?,
 				data: RwLock::new(Vec::new()),
 			})
 		})? {
 			if let Ok(p) = panel {
 				return Ok(p);
-			} else {
-				println!("WTF");
 			}
 		}
 
@@ -166,10 +176,13 @@ impl SQLiteDataStore {
 		interval: i32,
 		query_x: &str,
 		query_y: &str,
+		color: Color32,
+		visible: bool,
 	) -> rusqlite::Result<usize> {
+		let color_u32 : Option<u32> = if color == Color32::TRANSPARENT { None } else { Some(repack_color(color)) };
 		self.conn.execute(
-			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ? WHERE id = ?",
-			params![name, url, interval, query_x, query_y, source_id],
+			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ?, color = ?, visible = ? WHERE id = ?",
+			params![name, url, interval, query_x, query_y, color_u32, visible, source_id],
 		)
 	}
 
