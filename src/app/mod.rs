@@ -150,14 +150,14 @@ impl eframe::App for App {
 									}
 									ui.separator();
 								}
-								ui.checkbox(&mut panel.view_scroll, "autoscroll");
-								ui.checkbox(&mut panel.timeserie, "timeserie");
-								ui.separator();
 								if self.filter {
 									ui.add(egui::Slider::new(&mut panel.view_size, 1..=1440).text("samples"));
 									ui.separator();
 								}
 								ui.add(egui::Slider::new(&mut panel.height, 0..=500).text("height"));
+								ui.separator();
+								ui.checkbox(&mut panel.view_scroll, "autoscroll");
+								ui.checkbox(&mut panel.timeserie, "timeserie");
 								ui.separator();
 							});
 
