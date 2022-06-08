@@ -3,20 +3,13 @@ pub mod worker;
 pub mod util;
 
 use std::sync::Arc;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::Utc;
 use eframe::egui;
 use eframe::egui::{plot::{Line, Plot}};
 
 use self::data::ApplicationState;
 use self::worker::native_save;
-
-fn timestamp_to_str(t:i64) -> String {
-	format!(
-		"{}",
-		DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(t, 0), Utc)
-			.format("%Y/%m/%d %H:%M:%S")
-	)
-}
+use self::util::{human_size, timestamp_to_str};
 
 struct InputBuffer {
 	panel_name: String,
@@ -112,7 +105,9 @@ impl eframe::App for App {
 		});
 		egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
 			ui.horizontal(|ui|{
-				ui.label(self.data.file.to_str().unwrap());
+				ui.label(self.data.file_path.to_str().unwrap());
+				ui.separator();
+				ui.label(human_size(*self.data.file_size.read().unwrap()));
 				ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
 					ui.horizontal(|ui| {
 						ui.label(format!("v{}-{}", env!("CARGO_PKG_VERSION"), git_version::git_version!()));

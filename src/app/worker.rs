@@ -79,6 +79,9 @@ impl BackgroundWorker for NativeBackgroundWorker {
 					}
 				}
 
+				let mut fsize = state.file_size.write().expect("File Size RwLock poisoned");
+				*fsize = std::fs::metadata(state.file_path.clone()).unwrap().len();
+
 				ctx.request_repaint();
 			}
 		});
