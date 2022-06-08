@@ -37,35 +37,39 @@ impl From::<rusqlite::Error> for FetchError {
 
 pub struct ApplicationState {
 	pub run: bool,
+	pub file_path: PathBuf,
+	pub file_size: RwLock<u64>,
 	pub panels: RwLock<Vec<Panel>>,
 	pub storage: Mutex<SQLiteDataStore>,
 }
 
 impl ApplicationState {
 	pub fn new(path:PathBuf) -> Self {
-		let storage = SQLiteDataStore::new(path).unwrap();
+		let storage = SQLiteDataStore::new(path.clone()).unwrap();
 
 		let panels = storage.load_panels().unwrap();
 
 		return ApplicationState{
 			run: true,
+			file_size: RwLock::new(std::fs::metadata(path.clone()).unwrap().len()),
+			file_path: path,
 			panels: RwLock::new(panels),
 			storage: Mutex::new(storage),
 		};
 	}
 
 	pub fn add_panel(&self, name:&str) -> Result<(), FetchError> {
-		let panel = self.storage.lock().unwrap().new_panel(name, 100, 200, 280)?; // TODO make values customizable and useful
-		self.panels.write().unwrap().push(panel);
+		let panel = self.storage.lock().expect("Storage Mutex poisoned").new_panel(name, 100, 200, 280)?; // TODO make values customizable and useful
+		self.panels.write().expect("Panels RwLock poisoned").push(panel);
 		Ok(())
 	}
 
 	pub fn add_source(&self, panel_id:i32, name:&str, url:&str, query_x:&str, query_y:&str) -> Result<(), FetchError> {
-		let source = self.storage.lock().unwrap().new_source(panel_id, name, url, query_x, query_y)?;
-		let panels = self.panels.read().unwrap();
+		let source = self.storage.lock().expect("Storage Mutex poisoned").new_source(panel_id, name, url, query_x, query_y)?;
+		let panels = self.panels.read().expect("Panels RwLock poisoned");
 		for panel in &*panels {
 			if panel.id == panel_id {
-				panel.sources.write().unwrap().push(source);
+				panel.sources.write().expect("Sources RwLock poisoned").push(source);
 				return Ok(());
 			}
 		}
@@ -104,26 +108,19 @@ pub struct Source {
 
 impl Source {
 	pub fn valid(&self) -> bool {
-		let last_fetch = self.last_fetch.read().unwrap();
+		let last_fetch = self.last_fetch.read().expect("LastFetch RwLock poisoned");
 		return (Utc::now() - *last_fetch).num_seconds() < self.interval as i64;
 	}
 
 	pub fn values(&self) -> Values {
-		Values::from_values(self.data.read().unwrap().clone())
+		Values::from_values(self.data.read().expect("Values RwLock poisoned").clone())
 	}
 
 	pub fn values_filter(&self, min_x:f64) -> Values {
-		let mut values = self.data.read().unwrap().clone();
+		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
 		values.retain(|x| x.x > min_x);
 		Values::from_values(values)
 	}
-
-	// Not really useful since different data has different fetch rates
-	// pub fn values_limit(&self, size:usize) -> Values {
-	// 	let values = self.data.read().unwrap().clone(); 
-	// 	let min = if values.len() < size { 0 } else { values.len() - size };
-	// 	Values::from_values(values[min..values.len()].to_vec())
-	// }
 }
 
 pub fn fetch(url:&str, query_x:&str, query_y:&str) -> Result<Value, FetchError> {
