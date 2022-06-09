@@ -126,29 +126,59 @@ impl eframe::App for App {
 				});
 			});
 		});
+		if self.edit {
+			egui::SidePanel::left("sources-bar").show(ctx, |ui| {
+				let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
+				egui::ScrollArea::vertical().show(ui, |ui| {
+					for source in &mut *sources {
+						ui.group(|ui| {
+							ui.horizontal(|ui| {
+								ui.checkbox(&mut source.visible, "");
+								eframe::egui::TextEdit::singleline(&mut source.name).hint_text("name").desired_width(80.0).show(ui);
+								eframe::egui::TextEdit::singleline(&mut source.url).hint_text("url").desired_width(300.0).show(ui);
+							});
+							ui.horizontal(|ui| {
+								ui.add(egui::Slider::new(&mut source.interval, 1..=60));
+								eframe::egui::TextEdit::singleline(&mut source.query_x).hint_text("x").desired_width(50.0).show(ui);
+								eframe::egui::TextEdit::singleline(&mut source.query_y).hint_text("y").desired_width(50.0).show(ui);
+								egui::ComboBox::from_id_source(format!("panel-{}", source.id))
+									.selected_text(format!("panel [{}]", source.panel_id))
+									.width(70.0)
+									.show_ui(ui, |ui| {
+										let pnls = self.data.panels.read().expect("Panels RwLock poisoned");
+										for p in &*pnls {
+											ui.selectable_value(&mut source.panel_id, p.id, p.name.as_str());
+										}
+									});
+								ui.color_edit_button_srgba(&mut source.color);
+							});
+						});
+					}
+				});
+			});
+		}
 		egui::CentralPanel::default().show(ctx, |ui| {
 			egui::ScrollArea::vertical().show(ui, |ui| {
 				let mut panels = self.data.panels.write().unwrap(); // TODO only lock as write when editing
+				let sources = self.data.sources.read().unwrap(); // TODO only lock as write when editing
 				for panel in &mut *panels {
-					let mut sources = panel.sources.write().unwrap(); // TODO only lock as write when editing
 					ui.group(|ui| {
 						ui.vertical(|ui| {
 							ui.horizontal(|ui| {
 								ui.heading(panel.name.as_str());
 								ui.separator();
-								for source in &mut *sources {
-									if self.edit {
-										ui.checkbox(&mut source.visible, "");
+								for source in &*sources {
+									if source.panel_id == panel.id {
+										if source.visible {
+											ui.label(
+												RichText::new(source.name.as_str())
+												.color(if source.color == Color32::TRANSPARENT { Color32::GRAY } else { source.color })
+											);
+										} else {
+											ui.label(RichText::new(source.name.as_str()).color(Color32::BLACK));
+										}
+										ui.separator();
 									}
-									if source.visible {
-										ui.label(
-											RichText::new(source.name.as_str())
-											.color(if source.color == Color32::TRANSPARENT { Color32::GRAY } else { source.color })
-										);
-									} else {
-										ui.label(RichText::new(source.name.as_str()).color(Color32::BLACK));
-									}
-									ui.separator();
 								}
 								if self.filter {
 									ui.add(egui::Slider::new(&mut panel.view_size, 1..=1440).text("samples"));
@@ -160,23 +190,6 @@ impl eframe::App for App {
 								ui.checkbox(&mut panel.timeserie, "timeserie");
 								ui.separator();
 							});
-
-
-							if self.edit {
-								for source in &mut *sources {
-									ui.horizontal(|ui| {
-										ui.add(egui::Slider::new(&mut source.interval, 1..=60));
-										eframe::egui::TextEdit::singleline(&mut source.url).hint_text("url").desired_width(300.0).show(ui);
-										if !panel.timeserie {
-											eframe::egui::TextEdit::singleline(&mut source.query_x).hint_text("x").desired_width(50.0).show(ui);
-										}
-										eframe::egui::TextEdit::singleline(&mut source.query_y).hint_text("y").desired_width(50.0).show(ui);
-										ui.color_edit_button_srgba(&mut source.color);
-										ui.separator();
-										ui.label(source.name.as_str());
-									});
-								}
-							}
 
 							let mut p = Plot::new(format!("plot-{}", panel.name))
 								.height(panel.height as f32)
@@ -201,8 +214,8 @@ impl eframe::App for App {
 							}
 
 							p.show(ui, |plot_ui| {
-								for source in &mut *sources {
-									if source.visible {
+								for source in &*sources {
+									if source.visible && source.panel_id == panel.id {
 										let line = if self.filter {
 											Line::new(source.values_filter((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64)).name(source.name.as_str())
 										} else {
