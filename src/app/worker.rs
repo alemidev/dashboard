@@ -17,10 +17,11 @@ pub fn native_save(state:Arc<ApplicationState>) {
 				panel.width,
 				panel.height
 			).unwrap();
-			let sources = panel.sources.read().unwrap();
+			let sources = state.sources.read().unwrap();
 			for source in &*sources {
 				storage.update_source(
 					source.id,
+					source.panel_id,
 					source.name.as_str(),
 					source.url.as_str(),
 					source.interval,
@@ -54,30 +55,25 @@ impl BackgroundWorker for NativeBackgroundWorker {
 				}
 				last_check = Utc::now().timestamp_millis();
 
-				let panels = state.panels.read().unwrap();
-				for i in 0..panels.len() {
-					let sources = panels[i].sources.read().unwrap();
-					let p_id = panels[i].id;
-					for j in 0..sources.len() {
-						let s_id = sources[j].id;
-						if !sources[j].valid() {
+				let sources = state.sources.read().unwrap();
+				for j in 0..sources.len() {
+					let s_id = sources[j].id;
+					if !sources[j].valid() {
+						let mut last_update = sources[j].last_fetch.write().unwrap();
+						*last_update = Utc::now();
+						let state2 = state.clone();
+						let url = sources[j].url.clone();
+						let query_x = sources[j].query_x.clone();
+						let query_y = sources[j].query_y.clone();
+						std::thread::spawn(move || { // TODO this can overspawn if a request takes longer than the refresh interval!
+							let v = fetch(url.as_str(), query_x.as_str(), query_y.as_str()).unwrap();
+							let store = state2.storage.lock().unwrap();
+							store.put_value(s_id, v).unwrap();
+							let sources = state2.sources.read().unwrap();
+							sources[j].data.write().unwrap().push(v);
 							let mut last_update = sources[j].last_fetch.write().unwrap();
-							*last_update = Utc::now();
-							let state2 = state.clone();
-							let url = sources[j].url.clone();
-							let query_x = sources[j].query_x.clone();
-							let query_y = sources[j].query_y.clone();
-							std::thread::spawn(move || { // TODO this can overspawn if a request takes longer than the refresh interval!
-								let v = fetch(url.as_str(), query_x.as_str(), query_y.as_str()).unwrap();
-								let store = state2.storage.lock().unwrap();
-								store.put_value(p_id, s_id, v).unwrap();
-								let panels = state2.panels.read().unwrap();
-								let sources = panels[i].sources.read().unwrap();
-								sources[j].data.write().unwrap().push(v);
-								let mut last_update = sources[j].last_fetch.write().unwrap();
-								*last_update = Utc::now(); // overwrite it so fetches comply with API slowdowns and get desynched among them
-							});
-						}
+							*last_update = Utc::now(); // overwrite it so fetches comply with API slowdowns and get desynched among them
+						});
 					}
 				}
 

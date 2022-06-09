@@ -18,7 +18,6 @@ pub enum FetchError {
 	JQLError(String),
 	RusqliteError(rusqlite::Error),
 	ParseFloatError(ParseFloatError),
-	NoPanelWithThatIdError,
 }
 
 impl From::<ureq::Error> for FetchError {
@@ -42,6 +41,7 @@ pub struct ApplicationState {
 	pub file_path: PathBuf,
 	pub file_size: RwLock<u64>,
 	pub panels: RwLock<Vec<Panel>>,
+	pub sources: RwLock<Vec<Source>>,
 	pub storage: Mutex<SQLiteDataStore>,
 }
 
@@ -50,12 +50,14 @@ impl ApplicationState {
 		let storage = SQLiteDataStore::new(path.clone()).unwrap();
 
 		let panels = storage.load_panels().unwrap();
+		let sources = storage.load_sources().unwrap();
 
 		return ApplicationState{
 			run: true,
 			file_size: RwLock::new(std::fs::metadata(path.clone()).unwrap().len()),
 			file_path: path,
 			panels: RwLock::new(panels),
+			sources: RwLock::new(sources),
 			storage: Mutex::new(storage),
 		};
 	}
@@ -69,14 +71,8 @@ impl ApplicationState {
 	pub fn add_source(&self, panel_id:i32, name:&str, url:&str, query_x:&str, query_y:&str, color:Color32, visible:bool) -> Result<(), FetchError> {
 		let source = self.storage.lock().expect("Storage Mutex poisoned")
 			.new_source(panel_id, name, url, query_x, query_y, color, visible)?;
-		let panels = self.panels.read().expect("Panels RwLock poisoned");
-		for panel in &*panels {
-			if panel.id == panel_id {
-				panel.sources.write().expect("Sources RwLock poisoned").push(source);
-				return Ok(());
-			}
-		}
-		Err(FetchError::NoPanelWithThatIdError)
+		self.sources.write().expect("Sources RwLock poisoned").push(source);
+		return Ok(());
 	}
 }
 
@@ -88,8 +84,6 @@ pub struct Panel {
 	pub timeserie: bool,
 	pub(crate) width: i32,
 	pub(crate) height: i32,
-	pub(crate) sources: RwLock<Vec<Source>>,
-
 }
 
 impl Panel {
@@ -107,7 +101,7 @@ pub struct Source {
 	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,
 	pub query_y: String,
 	// pub(crate) compiled_query_y: Arc<Mutex<jq_rs::JqProgram>>,
-	// pub(crate) panel_id: i32,
+	pub(crate) panel_id: i32,
 	pub(crate) data: RwLock<Vec<Value>>,
 }
 

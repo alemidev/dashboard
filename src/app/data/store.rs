@@ -48,7 +48,6 @@ impl SQLiteDataStore {
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS points (
 				id INTEGER PRIMARY KEY,
-				panel_id INT NOT NULL,
 				source_id INT NOT NULL,
 				x FLOAT NOT NULL,
 				y FLOAT NOT NULL
@@ -61,12 +60,12 @@ impl SQLiteDataStore {
 
 	
 
-	pub fn load_values(&self, panel_id: i32, source_id: i32) -> rusqlite::Result<Vec<Value>> {
+	pub fn load_values(&self, source_id: i32) -> rusqlite::Result<Vec<Value>> {
 		let mut values: Vec<Value> = Vec::new();
 		let mut statement = self
 			.conn
-			.prepare("SELECT x, y FROM points WHERE panel_id = ? AND source_id = ?")?;
-		let values_iter = statement.query_map(params![panel_id, source_id], |row| {
+			.prepare("SELECT x, y FROM points WHERE source_id = ?")?;
+		let values_iter = statement.query_map(params![source_id], |row| {
 			Ok(Value {
 				x: row.get(0)?,
 				y: row.get(1)?,
@@ -82,21 +81,21 @@ impl SQLiteDataStore {
 		Ok(values)
 	}
 
-	pub fn put_value(&self, panel_id: i32, source_id: i32, v: Value) -> rusqlite::Result<usize> {
+	pub fn put_value(&self, source_id: i32, v: Value) -> rusqlite::Result<usize> {
 		self.conn.execute(
-			"INSERT INTO points(panel_id, source_id, x, y) VALUES (?, ?, ?, ?)",
-			params![panel_id, source_id, v.x, v.y],
+			"INSERT INTO points(source_id, x, y) VALUES (?, ?, ?)",
+			params![source_id, v.x, v.y],
 		)
 	}
 
 
 
-	pub fn load_sources(&self, panel_id: i32) -> rusqlite::Result<Vec<Source>> {
+	pub fn load_sources(&self) -> rusqlite::Result<Vec<Source>> {
 		let mut sources: Vec<Source> = Vec::new();
 		let mut statement = self
 			.conn
-			.prepare("SELECT * FROM sources WHERE panel_id = ?")?;
-		let sources_iter = statement.query_map(params![panel_id], |row| {
+			.prepare("SELECT * FROM sources")?;
+		let sources_iter = statement.query_map([], |row| {
 			Ok(Source {
 				id: row.get(0)?,
 				name: row.get(1)?,
@@ -107,7 +106,7 @@ impl SQLiteDataStore {
 				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
 				query_y: row.get(5)?,
 				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
-				// panel_id: row.get(6)?,
+				panel_id: row.get(6)?,
 				color: unpack_color(row.get(7).unwrap_or(0)),
 				visible: row.get(8)?,
 				data: RwLock::new(Vec::new()),
@@ -116,7 +115,7 @@ impl SQLiteDataStore {
 
 		for source in sources_iter {
 			if let Ok(mut s) = source {
-				s.data = RwLock::new(self.load_values(panel_id, s.id)?);
+				s.data = RwLock::new(self.load_values(s.id)?);
 				sources.push(s);
 			}
 		}
@@ -154,7 +153,7 @@ impl SQLiteDataStore {
 				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
 				query_y: row.get(5)?,
 				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
-				// panel_id: row.get(6)?,
+				panel_id: row.get(6)?,
 				color: unpack_color(row.get(7).unwrap_or(0)),
 				visible: row.get(8)?,
 				data: RwLock::new(Vec::new()),
@@ -171,6 +170,7 @@ impl SQLiteDataStore {
 	pub fn update_source(
 		&self,
 		source_id: i32,
+		panel_id: i32,
 		name: &str,
 		url: &str,
 		interval: i32,
@@ -181,8 +181,8 @@ impl SQLiteDataStore {
 	) -> rusqlite::Result<usize> {
 		let color_u32 : Option<u32> = if color == Color32::TRANSPARENT { None } else { Some(repack_color(color)) };
 		self.conn.execute(
-			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ?, color = ?, visible = ? WHERE id = ?",
-			params![name, url, interval, query_x, query_y, color_u32, visible, source_id],
+			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, visible = ? WHERE id = ?",
+			params![name, url, interval, query_x, query_y, panel_id, color_u32, visible, source_id],
 		)
 	}
 
@@ -202,13 +202,11 @@ impl SQLiteDataStore {
 				timeserie: row.get(4)?,
 				width: row.get(5)?,
 				height: row.get(6)?,
-				sources: RwLock::new(Vec::new()),
 			})
 		})?;
 
 		for panel in panels_iter {
-			if let Ok(mut p) = panel {
-				p.sources = RwLock::new(self.load_sources(p.id)?);
+			if let Ok(p) = panel {
 				panels.push(p);
 			}
 		}
@@ -232,7 +230,6 @@ impl SQLiteDataStore {
 				timeserie: row.get(4)?,
 				width: row.get(5)?,
 				height: row.get(6)?,
-				sources: RwLock::new(Vec::new()),
 			})
 		})? {
 			if let Ok(p) = panel {
