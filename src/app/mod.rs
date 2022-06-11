@@ -5,6 +5,7 @@ pub mod util;
 use std::sync::Arc;
 use chrono::Utc;
 use eframe::egui;
+use eframe::egui::plot::GridMark;
 use eframe::egui::{RichText, plot::{Line, Plot}, Color32};
 
 use self::data::ApplicationState;
@@ -152,6 +153,10 @@ impl eframe::App for App {
 							});
 						});
 					}
+					ui.collapsing("extra space", |ui| {
+						ui.add_space(300.0);
+						ui.separator();
+					})
 				});
 			});
 		}
@@ -201,13 +206,28 @@ impl eframe::App for App {
 							}
 
 							if panel.timeserie {
-								p = p.x_axis_formatter(|x, _range| timestamp_to_str(x as i64));
+								p = p.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false));
 								p = p.label_formatter(|name, value| {
 									if !name.is_empty() {
-										return format!("{}\nx = {}\ny = {:.1}", name, timestamp_to_str(value.x as i64), value.y)
+										return format!("{}\nx = {}\ny = {:.1}", name, timestamp_to_str(value.x as i64, false, true), value.y)
 									} else {
-										return format!("x = {}\ny = {:.1}", timestamp_to_str(value.x as i64), value.y);
+										return format!("x = {}\ny = {:.1}", timestamp_to_str(value.x as i64, false, true), value.y);
 									}
+								});
+								p = p.x_grid_spacer(|grid| {
+									let (start, end) = grid.bounds;
+									let mut counter = (start as i64) - ((start as i64) % 3600);
+									let mut out : Vec<GridMark> = Vec::new();
+									loop {
+										counter += 3600;
+										if counter > end as i64 { break; }
+										if counter % 86400 == 0 {
+											out.push(GridMark { value: counter as f64, step_size: 86400 as f64 })
+										} else if counter % 3600 == 0 {
+											out.push(GridMark { value: counter as f64, step_size: 3600 as f64 });
+										}
+									}
+									return out;
 								});
 							}
 
