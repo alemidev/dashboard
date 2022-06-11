@@ -84,6 +84,7 @@ pub struct Panel {
 	pub timeserie: bool,
 	pub(crate) width: i32,
 	pub(crate) height: i32,
+	pub limit: bool,
 }
 
 impl Panel {

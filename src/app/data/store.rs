@@ -25,7 +25,8 @@ impl SQLiteDataStore {
 				view_size INT NOT NULL,
 				timeserie BOOL NOT NULL,
 				width INT NOT NULL,
-				height INT NOT NULL
+				height INT NOT NULL,
+				limit_view BOOL NOT NULL
 			);",
 			[],
 		)?;
@@ -202,6 +203,7 @@ impl SQLiteDataStore {
 				timeserie: row.get(4)?,
 				width: row.get(5)?,
 				height: row.get(6)?,
+				limit: row.get(7)?,
 			})
 		})?;
 
@@ -217,8 +219,8 @@ impl SQLiteDataStore {
 	// jank! TODO make it not jank!
 	pub fn new_panel(&self, name: &str, view_size:i32, width: i32, height: i32) -> rusqlite::Result<Panel> {
 		self.conn.execute(
-			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height) VALUES (?, ?, ?, ?, ?, ?)",
-			params![name, true, view_size, true, width, height]
+			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			params![name, true, view_size, true, width, height, false]
 		)?;
 		let mut statement = self.conn.prepare("SELECT * FROM panels WHERE name = ?")?;
 		for panel in statement.query_map(params![name], |row| {
@@ -230,6 +232,7 @@ impl SQLiteDataStore {
 				timeserie: row.get(4)?,
 				width: row.get(5)?,
 				height: row.get(6)?,
+				limit: row.get(7)?,
 			})
 		})? {
 			if let Ok(p) = panel {
@@ -248,10 +251,11 @@ impl SQLiteDataStore {
 		timeserie: bool,
 		width: i32,
 		height: i32,
+		limit: bool,
 	) -> rusqlite::Result<usize> {
 		self.conn.execute(
-			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ? WHERE id = ?",
-			params![name, view_scroll, view_size, timeserie, width, height, id],
+			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ?, limit_view = ? WHERE id = ?",
+			params![name, view_scroll, view_size, timeserie, width, height, limit, id],
 		)
 	}
 

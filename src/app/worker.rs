@@ -15,7 +15,8 @@ pub fn native_save(state:Arc<ApplicationState>) {
 				panel.view_size,
 				panel.timeserie,
 				panel.width,
-				panel.height
+				panel.height,
+				panel.limit,
 			).unwrap();
 			let sources = state.sources.read().unwrap();
 			for source in &*sources {
