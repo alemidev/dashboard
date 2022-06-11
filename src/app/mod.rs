@@ -43,12 +43,11 @@ pub struct App {
 	data: Arc<ApplicationState>,
 	input: InputBuffer,
 	edit: bool,
-	filter: bool,
 }
 
 impl App {
 	pub fn new(_cc: &eframe::CreationContext, data: Arc<ApplicationState>) -> Self {
-		Self { data, input: InputBuffer::default(), edit: false, filter: false }
+		Self { data, input: InputBuffer::default(), edit: false }
 	}
 }
 
@@ -59,12 +58,11 @@ impl eframe::App for App {
 				egui::widgets::global_dark_light_mode_switch(ui);
 				ui.heading("dashboard");
 				ui.separator();
-				ui.checkbox(&mut self.filter, "filter");
-				ui.separator();
 				ui.checkbox(&mut self.edit, "edit");
 				if self.edit {
 					if ui.button("save").clicked() {
 						native_save(self.data.clone());
+						self.edit = false;
 					}
 					ui.separator();
 					ui.label("+ panel");
@@ -74,10 +72,10 @@ impl eframe::App for App {
 					}
 					ui.separator();
 					ui.label("+ source");
-					eframe::egui::TextEdit::singleline(&mut self.input.name).hint_text("name").desired_width(35.0).show(ui);
-					eframe::egui::TextEdit::singleline(&mut self.input.url).hint_text("url").desired_width(80.0).show(ui);
-					eframe::egui::TextEdit::singleline(&mut self.input.query_x).hint_text("x").desired_width(25.0).show(ui);
-					eframe::egui::TextEdit::singleline(&mut self.input.query_y).hint_text("y").desired_width(25.0).show(ui);
+					eframe::egui::TextEdit::singleline(&mut self.input.name).hint_text("name").desired_width(50.0).show(ui);
+					eframe::egui::TextEdit::singleline(&mut self.input.url).hint_text("url").desired_width(160.0).show(ui);
+					eframe::egui::TextEdit::singleline(&mut self.input.query_x).hint_text("x").desired_width(30.0).show(ui);
+					eframe::egui::TextEdit::singleline(&mut self.input.query_y).hint_text("y").desired_width(30.0).show(ui);
 					egui::ComboBox::from_id_source("panel")
 						.selected_text(format!("panel [{}]", self.input.panel_id))
 						.width(70.0)
@@ -180,14 +178,14 @@ impl eframe::App for App {
 										ui.separator();
 									}
 								}
-								if self.filter {
-									ui.add(egui::Slider::new(&mut panel.view_size, 1..=1440).text("samples"));
-									ui.separator();
-								}
 								ui.add(egui::Slider::new(&mut panel.height, 0..=500).text("height"));
 								ui.separator();
-								ui.checkbox(&mut panel.view_scroll, "autoscroll");
+								ui.checkbox(&mut panel.limit, "limit");
+								ui.add(egui::DragValue::new(&mut panel.view_size).speed(10).clamp_range(0..=2147483647));
+								ui.label("mins");
+								ui.separator();
 								ui.checkbox(&mut panel.timeserie, "timeserie");
+								ui.checkbox(&mut panel.view_scroll, "autoscroll");
 								ui.separator();
 							});
 
@@ -197,7 +195,7 @@ impl eframe::App for App {
 
 							if panel.view_scroll {
 								p = p.include_x(Utc::now().timestamp() as f64);
-								if self.filter {
+								if panel.limit {
 									p = p.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64);
 								}
 							}
@@ -216,7 +214,7 @@ impl eframe::App for App {
 							p.show(ui, |plot_ui| {
 								for source in &*sources {
 									if source.visible && source.panel_id == panel.id {
-										let line = if self.filter {
+										let line = if panel.limit {
 											Line::new(source.values_filter((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64)).name(source.name.as_str())
 										} else {
 											Line::new(source.values()).name(source.name.as_str())
