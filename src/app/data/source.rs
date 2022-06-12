@@ -1,201 +1,61 @@
-use std::sync::{Arc, Mutex};
-use rand::Rng;
-use std::io::{Write, Read};
+use std::sync::RwLock;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize, de::{DeserializeOwned}};
-use eframe::egui::{plot::Value, Context};
+use eframe::egui::plot::{Values, Value};
+use eframe::epaint::Color32;
+use super::FetchError;
 
-pub fn native_save(name: &str, data:String) -> std::io::Result<()> {
-	let mut file = std::fs::File::create(name)?;
-	file.write_all(data.as_bytes())?;
-	return Ok(());
-}
-pub struct DataSource {
-	data : Arc<Mutex<Vec<Value>>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct SerializableValue {
-	x : f64,
-	y : f64,
+pub struct Panel {
+	pub(crate) id: i32,
+	pub name: String,
+	pub view_scroll: bool,
+	pub view_size: i32,
+	pub timeserie: bool,
+	pub(crate) width: i32,
+	pub(crate) height: i32,
+	pub limit: bool,
 }
 
-impl DataSource {
-	pub fn new() -> Self {
-		Self{ data: Arc::new(Mutex::new(Vec::new())) }
+pub struct Source {
+	pub(crate) id: i32,
+	pub name: String,
+	pub url: String,
+	pub interval: i32,
+	pub color: Color32,
+	pub visible: bool,
+	pub(crate) last_fetch: RwLock<DateTime<Utc>>,
+	pub query_x: String,
+	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,
+	pub query_y: String,
+	// pub(crate) compiled_query_y: Arc<Mutex<jq_rs::JqProgram>>,
+	pub(crate) panel_id: i32,
+	pub(crate) data: RwLock<Vec<Value>>,
+}
+
+impl Source {
+	pub fn valid(&self) -> bool {
+		let last_fetch = self.last_fetch.read().expect("LastFetch RwLock poisoned");
+		return (Utc::now() - *last_fetch).num_seconds() < self.interval as i64;
 	}
 
-	pub fn view(&self) -> Vec<Value> { // TODO handle errors
-		return self.data.lock().unwrap().clone();
+	pub fn values(&self) -> Values {
+		Values::from_values(self.data.read().expect("Values RwLock poisoned").clone())
 	}
 
-	pub fn serialize(&self) -> String {
-		let mut out : Vec<SerializableValue> = Vec::new();
-		for value in self.view() {
-			out.push(SerializableValue { x: value.x, y: value.y });
-		}
-		return serde_json::to_string(&out).unwrap();
-	}
-}
-
-pub trait PlotValue {
-	fn as_value(&self) -> Value;
-}
-
-pub trait Data {
-	fn load_remote(&mut self, url:&str, ctx:Context);
-	fn load_local(&mut self, file:&str, ctx:Context);
-
-	fn read(&mut self, file:&str, storage:Arc<Mutex<Vec<Value>>>, ctx:Context) -> std::io::Result<()> {
-		let mut file = std::fs::File::open(file)?;
-		let mut contents = String::new();
-		file.read_to_string(&mut contents)?;
-		let data : Vec<SerializableValue> = serde_json::from_str(contents.as_str())?;
-		for v in data {
-			storage.lock().unwrap().push(Value { x: v.x, y: v.y });
-		}
-		ctx.request_repaint();
-		Ok(())
-	}
-
-	fn fetch<T>(&mut self, base:&str, endpoint:&str, storage:Arc<Mutex<Vec<Value>>>, ctx:Context) 
-	where T : DeserializeOwned + PlotValue {
-		let request = ehttp::Request::get(format!("{}/{}", base, endpoint));
-		ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-			let data : T = serde_json::from_slice(result.unwrap().bytes.as_slice()).unwrap();
-			storage.lock().unwrap().push(data.as_value()); 
-			ctx.request_repaint();
-		});
-
+	pub fn values_filter(&self, min_x:f64) -> Values {
+		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
+		values.retain(|x| x.x > min_x);
+		Values::from_values(values)
 	}
 }
 
-pub struct TpsData {
-	pub ds: DataSource,
-	load_interval : i64,
-	last_load : DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TpsResponseData {
-	tps: f64
-}
-
-impl PlotValue for TpsResponseData {
-	fn as_value(&self) -> Value {
-		Value { x: Utc::now().timestamp() as f64, y: self.tps }
+pub fn fetch(url:&str, query_x:&str, query_y:&str) -> Result<Value, FetchError> {
+	let res = ureq::get(url).call()?.into_json()?;
+	let x : f64;
+	if query_x.len() > 0 {
+		x = jql::walker(&res, query_x)?.as_f64().unwrap(); // TODO what if it's given to us as a string?
+	} else {
+		x = Utc::now().timestamp() as f64;
 	}
-}
-
-impl TpsData {
-	pub fn new(load_interval:i64) -> Self {
-		Self { ds: DataSource::new() , last_load: Utc::now(), load_interval }
-	}
-}
-
-impl Data for TpsData{
-	fn load_remote(&mut self, url:&str, ctx:Context) {
-		if (Utc::now() - self.last_load).num_seconds() < self.load_interval { return; }
-		self.last_load = Utc::now();
-		self.fetch::<TpsResponseData>(url, "tps", self.ds.data.clone(), ctx);
-	}
-
-	fn load_local(&mut self, file:&str, ctx:Context) {
-		self.read(file, self.ds.data.clone(), ctx).unwrap_or_else(|_err| println!("Could not load {}", file));
-	}
-}
-
-pub struct ChatData {
-	pub ds : DataSource,
-	load_interval : i64,
-	last_load : DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ChatResponseData {
-	volume: f64
-}
-
-impl PlotValue for ChatResponseData {
-	fn as_value(&self) -> Value {
-		Value { x:Utc::now().timestamp() as f64, y: self.volume }
-	}
-}
-
-impl ChatData {
-	pub fn new(load_interval:i64) -> Self {
-		Self { ds: DataSource::new() , last_load: Utc::now(), load_interval }
-	}
-}
-
-impl Data for ChatData{
-	fn load_remote(&mut self, url:&str, ctx:Context) {
-		if (Utc::now() - self.last_load).num_seconds() < self.load_interval { return; }
-		self.last_load = Utc::now();
-		self.fetch::<ChatResponseData>(url, "chat_activity", self.ds.data.clone(), ctx);
-	}
-
-	fn load_local(&mut self, file:&str, ctx:Context) {
-		self.read(file, self.ds.data.clone(), ctx).unwrap_or_else(|_err| println!("Could not load {}", file));
-	}
-}
-
-pub struct PlayerCountData {
-	pub ds : DataSource,
-	load_interval : i64,
-	last_load : DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct PlayerCountResponseData {
-	count: i32
-}
-
-impl PlotValue for PlayerCountResponseData {
-	fn as_value(&self) -> Value {
-		Value { x:Utc::now().timestamp() as f64, y: self.count as f64 }
-	}
-}
-
-impl PlayerCountData {
-	pub fn new(load_interval:i64) -> Self {
-		Self { ds: DataSource::new() , last_load: Utc::now(), load_interval }
-	}
-}
-
-impl Data for PlayerCountData{
-	fn load_remote(&mut self, url:&str, ctx:Context) {
-		if (Utc::now() - self.last_load).num_seconds() < self.load_interval { return; }
-		self.last_load = Utc::now();
-		self.fetch::<PlayerCountResponseData>(url, "player_count", self.ds.data.clone(), ctx);
-	}
-
-	fn load_local(&mut self, file:&str, ctx:Context) {
-		self.read(file, self.ds.data.clone(), ctx).unwrap_or_else(|_err| println!("Could not load {}", file));
-	}
-}
-
-pub struct RandomData {
-	pub ds : DataSource,
-	load_interval : i64,
-	last_load : DateTime<Utc>,
-	rng: rand::rngs::ThreadRng,
-}
-
-impl RandomData {
-	#[allow(dead_code)]
-	pub fn new(load_interval:i64) -> Self {
-		Self { ds: DataSource::new() , last_load: Utc::now(), load_interval, rng : rand::thread_rng() }
-	}
-}
-
-impl Data for RandomData{
-	fn load_remote(&mut self, _url:&str, ctx:Context) {
-		if (Utc::now() - self.last_load).num_seconds() < self.load_interval { return; }
-		self.last_load = Utc::now();
-		self.ds.data.lock().unwrap().push(Value {x:Utc::now().timestamp() as f64, y:self.rng.gen()}); 
-		ctx.request_repaint();
-	}
-
-	fn load_local(&mut self, _file:&str, _ctx:Context) {}
+	let y = jql::walker(&res, query_y)?.as_f64().unwrap();
+	return Ok( Value { x, y } );
 }

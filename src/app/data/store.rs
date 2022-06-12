@@ -1,4 +1,4 @@
-use crate::app::{data::{Panel, Source}, util::repack_color};
+use crate::app::{data::source::{Panel, Source}, util::repack_color};
 use chrono::{TimeZone, Utc};
 use eframe::egui::{Color32, plot::Value};
 use rusqlite::{params, Connection};
