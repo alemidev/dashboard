@@ -41,27 +41,36 @@ pub struct ApplicationState {
 	pub panels: RwLock<Vec<Panel>>,
 	pub sources: RwLock<Vec<Source>>,
 	pub storage: Mutex<SQLiteDataStore>,
+	pub diagnostics: RwLock<Vec<String>>,
 }
 
 impl ApplicationState {
-	pub fn new(path:PathBuf) -> Self {
-		let storage = SQLiteDataStore::new(path.clone()).unwrap();
+	pub fn new(path:PathBuf) -> Result<ApplicationState, FetchError> {
+		let storage = SQLiteDataStore::new(path.clone())?;
 
-		let panels = storage.load_panels().unwrap();
-		let sources = storage.load_sources().unwrap();
+		let panels = storage.load_panels()?;
+		let sources = storage.load_sources()?;
 
-		return ApplicationState{
+		return Ok(ApplicationState{
 			run: true,
-			file_size: RwLock::new(std::fs::metadata(path.clone()).unwrap().len()),
+			file_size: RwLock::new(std::fs::metadata(path.clone())?.len()),
 			file_path: path,
 			panels: RwLock::new(panels),
 			sources: RwLock::new(sources),
 			storage: Mutex::new(storage),
-		};
+			diagnostics: RwLock::new(Vec::new()),
+		});
 	}
 
 	pub fn add_panel(&self, name:&str) -> Result<(), FetchError> {
-		let panel = self.storage.lock().expect("Storage Mutex poisoned").new_panel(name, 100, 200, 280)?; // TODO make values customizable and useful
+		let panel = self.storage.lock().expect("Storage Mutex poisoned")
+			.new_panel(
+				name,
+				100,
+				200,
+				280,
+				self.panels.read().expect("Panels RwLock poisoned").len() as i32 // todo can this be made more compact and without acquisition?
+			)?; // TODO make values customizable and useful
 		self.panels.write().expect("Panels RwLock poisoned").push(panel);
 		Ok(())
 	}

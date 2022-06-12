@@ -26,7 +26,8 @@ impl SQLiteDataStore {
 				timeserie BOOL NOT NULL,
 				width INT NOT NULL,
 				height INT NOT NULL,
-				limit_view BOOL NOT NULL
+				limit_view BOOL NOT NULL,
+				position INT NOT NULL
 			);",
 			[],
 		)?;
@@ -104,9 +105,7 @@ impl SQLiteDataStore {
 				interval: row.get(3)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
 				query_x: row.get(4)?,
-				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
 				query_y: row.get(5)?,
-				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
 				panel_id: row.get(6)?,
 				color: unpack_color(row.get(7).unwrap_or(0)),
 				visible: row.get(8)?,
@@ -151,9 +150,7 @@ impl SQLiteDataStore {
 				interval: row.get(3)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
 				query_x: row.get(4)?,
-				// compiled_query_x: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(4)?.as_str()).unwrap())),
 				query_y: row.get(5)?,
-				// compiled_query_y: Arc::new(Mutex::new(jq_rs::compile(row.get::<usize, String>(5)?.as_str()).unwrap())),
 				panel_id: row.get(6)?,
 				color: unpack_color(row.get(7).unwrap_or(0)),
 				visible: row.get(8)?,
@@ -193,7 +190,7 @@ impl SQLiteDataStore {
 
 	pub fn load_panels(&self) -> rusqlite::Result<Vec<Panel>> {
 		let mut panels: Vec<Panel> = Vec::new();
-		let mut statement = self.conn.prepare("SELECT * FROM panels")?;
+		let mut statement = self.conn.prepare("SELECT * FROM panels ORDER BY position")?;
 		let panels_iter = statement.query_map([], |row| {
 			Ok(Panel {
 				id: row.get(0)?,
@@ -217,10 +214,10 @@ impl SQLiteDataStore {
 	}
 
 	// jank! TODO make it not jank!
-	pub fn new_panel(&self, name: &str, view_size:i32, width: i32, height: i32) -> rusqlite::Result<Panel> {
+	pub fn new_panel(&self, name: &str, view_size:i32, width: i32, height: i32, position: i32) -> rusqlite::Result<Panel> {
 		self.conn.execute(
-			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			params![name, true, view_size, true, width, height, false]
+			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			params![name, true, view_size, true, width, height, false, position]
 		)?;
 		let mut statement = self.conn.prepare("SELECT * FROM panels WHERE name = ?")?;
 		for panel in statement.query_map(params![name], |row| {
@@ -252,10 +249,11 @@ impl SQLiteDataStore {
 		width: i32,
 		height: i32,
 		limit: bool,
+		position: i32,
 	) -> rusqlite::Result<usize> {
 		self.conn.execute(
-			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ?, limit_view = ? WHERE id = ?",
-			params![name, view_scroll, view_size, timeserie, width, height, limit, id],
+			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ?, limit_view = ?, position = ? WHERE id = ?",
+			params![name, view_scroll, view_size, timeserie, width, height, limit, position, id],
 		)
 	}
 

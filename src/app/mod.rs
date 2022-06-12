@@ -4,6 +4,7 @@ pub mod util;
 
 use std::sync::Arc;
 use chrono::{Utc, Local};
+use tracing::error;
 use eframe::egui;
 use eframe::egui::plot::GridMark;
 use eframe::egui::{RichText, plot::{Line, Plot}, Color32};
@@ -44,11 +45,12 @@ pub struct App {
 	data: Arc<ApplicationState>,
 	input: InputBuffer,
 	edit: bool,
+	show_log: bool,
 }
 
 impl App {
 	pub fn new(_cc: &eframe::CreationContext, data: Arc<ApplicationState>) -> Self {
-		Self { data, input: InputBuffer::default(), edit: false }
+		Self { data, input: InputBuffer::default(), edit: false, show_log: false }
 	}
 }
 
@@ -69,7 +71,9 @@ impl eframe::App for App {
 					ui.label("+ panel");
 					eframe::egui::TextEdit::singleline(&mut self.input.panel_name).hint_text("name").desired_width(50.0).show(ui);
 					if ui.button("add").clicked() {
-						self.data.add_panel(self.input.panel_name.as_str()).unwrap();
+						if let Err(e) = self.data.add_panel(self.input.panel_name.as_str()) {
+							error!(target: "ui", "Failed to add panel: {:?}", e);
+						};
 					}
 					ui.separator();
 					ui.label("+ source");
@@ -81,7 +85,7 @@ impl eframe::App for App {
 						.selected_text(format!("panel [{}]", self.input.panel_id))
 						.width(70.0)
 						.show_ui(ui, |ui| {
-							let pnls = self.data.panels.write().unwrap();
+							let pnls = self.data.panels.write().expect("Panels RwLock poisoned");
 							for p in &*pnls {
 								ui.selectable_value(&mut self.input.panel_id, p.id, p.name.as_str());
 							}
@@ -91,7 +95,7 @@ impl eframe::App for App {
 					ui.add(egui::Slider::new(&mut self.input.interval, 1..=60));
 					ui.color_edit_button_srgba(&mut self.input.color);
 					if ui.button("add").clicked() {
-						self.data.add_source(
+						if let Err(e) = self.data.add_source(
 							self.input.panel_id,
 							self.input.name.as_str(),
 							self.input.url.as_str(),
@@ -99,22 +103,32 @@ impl eframe::App for App {
 							self.input.query_y.as_str(),
 							self.input.color,
 							self.input.visible,
-						).unwrap();
+						) {
+							error!(target: "ui", "Error adding souce : {:?}", e);
+						}
 					}
 					ui.separator();
 				}
 				ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
-					if ui.button("×").clicked() {
-						frame.quit();
-					}
+					ui.horizontal(|ui| {
+						if ui.small_button("×").clicked() {
+							frame.quit();
+						}
+						ui.checkbox(&mut self.show_log, "log");
+					});
 				});
 			});
 		});
 		egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
 			ui.horizontal(|ui|{
-				ui.label(self.data.file_path.to_str().unwrap());
+				ui.label(self.data.file_path.to_str().unwrap()); // TODO maybe calculate it just once?
 				ui.separator();
-				ui.label(human_size(*self.data.file_size.read().unwrap()));
+				ui.label(human_size(*self.data.file_size.read().expect("Filesize RwLock poisoned")));
+				let diags = self.data.diagnostics.read().expect("Diagnostics RwLock poisoned");
+				if diags.len() > 0 {
+					ui.separator();
+					ui.label(diags.last().unwrap_or(&"".to_string()));
+				}
 				ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
 					ui.horizontal(|ui| {
 						ui.label(format!("v{}-{}", env!("CARGO_PKG_VERSION"), git_version::git_version!()));
@@ -160,16 +174,37 @@ impl eframe::App for App {
 				});
 			});
 		}
+		if self.show_log {
+			egui::SidePanel::right("logs-panel").show(ctx, |ui| {
+				egui::ScrollArea::vertical().show(ui, |ui| {
+					ui.heading("logs");
+					ui.separator();
+					let msgs = self.data.diagnostics.read().expect("Diagnostics RwLock poisoned");
+					ui.group(|ui| {
+						for msg in msgs.iter() {
+							ui.label(msg);
+						}
+					});
+				});
+			});
+		}
+		let mut to_swap : Vec<usize> = Vec::new();
 		egui::CentralPanel::default().show(ctx, |ui| {
 			egui::ScrollArea::vertical().show(ui, |ui| {
-				let mut panels = self.data.panels.write().unwrap(); // TODO only lock as write when editing
-				let sources = self.data.sources.read().unwrap(); // TODO only lock as write when editing
-				for panel in &mut *panels {
+				let mut panels = self.data.panels.write().expect("Panels RwLock poisoned"); // TODO only lock as write when editing
+				let sources = self.data.sources.read().expect("Sources RwLock poisoned"); // TODO only lock as write when editing
+				for (index, panel) in panels.iter_mut().enumerate() {
 					ui.group(|ui| {
 						ui.vertical(|ui| {
 							ui.horizontal(|ui| {
 								ui.heading(panel.name.as_str());
 								ui.separator();
+								if self.edit && index > 0 {
+									if ui.small_button("up").clicked() {
+										to_swap.push(index); // TODO kinda jank but is there a better way?
+									}
+									ui.separator(); 
+								}
 								for source in &*sources {
 									if source.panel_id == panel.id {
 										if source.visible {
@@ -249,5 +284,11 @@ impl eframe::App for App {
 				}
 			});
 		});
+		if !to_swap.is_empty() { // TODO can this be done in background? idk
+			let mut panels = self.data.panels.write().expect("Panels RwLock poisoned");
+			for index in to_swap {
+				panels.swap(index-1, index);
+			}
+		}
 	}
 }
