@@ -7,6 +7,10 @@ edition = "2021"
 name = "dashboard_bin"
 path = "src/main.rs"
 
+[features]
+default = []
+bundled = ["rusqlite/bundled"]
+
 [dependencies]
 rand = "0.8"
 dirs = "4"
