@@ -3,7 +3,7 @@ pub mod worker;
 pub mod util;
 
 use std::sync::Arc;
-use chrono::Utc;
+use chrono::{Utc, Local};
 use eframe::egui;
 use eframe::egui::plot::GridMark;
 use eframe::egui::{RichText, plot::{Line, Plot}, Color32};
@@ -215,13 +215,14 @@ impl eframe::App for App {
 									}
 								});
 								p = p.x_grid_spacer(|grid| {
+									let offset = Local::now().offset().local_minus_utc() as i64;
 									let (start, end) = grid.bounds;
 									let mut counter = (start as i64) - ((start as i64) % 3600);
 									let mut out : Vec<GridMark> = Vec::new();
 									loop {
 										counter += 3600;
 										if counter > end as i64 { break; }
-										if counter % 86400 == 0 {
+										if (counter + offset) % 86400 == 0 {
 											out.push(GridMark { value: counter as f64, step_size: 86400 as f64 })
 										} else if counter % 3600 == 0 {
 											out.push(GridMark { value: counter as f64, step_size: 3600 as f64 });
