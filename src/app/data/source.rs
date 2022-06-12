@@ -52,10 +52,10 @@ pub fn fetch(url:&str, query_x:&str, query_y:&str) -> Result<Value, FetchError> 
 	let res = ureq::get(url).call()?.into_json()?;
 	let x : f64;
 	if query_x.len() > 0 {
-		x = jql::walker(&res, query_x)?.as_f64().unwrap(); // TODO what if it's given to us as a string?
+		x = jql::walker(&res, query_x)?.as_f64().ok_or(FetchError::JQLError("X query is null".to_string()))?; // TODO what if it's given to us as a string?
 	} else {
 		x = Utc::now().timestamp() as f64;
 	}
-	let y = jql::walker(&res, query_y)?.as_f64().unwrap();
+	let y = jql::walker(&res, query_y)?.as_f64().ok_or(FetchError::JQLError("Y query is null".to_string()))?;
 	return Ok( Value { x, y } );
 }
