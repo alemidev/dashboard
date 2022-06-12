@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use chrono::Utc;
 use eframe::egui::Context;
-use crate::app::data::{fetch, ApplicationState};
+use crate::app::data::{ApplicationState, source::fetch};
 
 pub fn native_save(state:Arc<ApplicationState>) {
 	std::thread::spawn(move || {
