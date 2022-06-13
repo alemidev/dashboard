@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use chrono::{DateTime, NaiveDateTime, Utc, Local};
-use tracing_subscriber::Layer;
+use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use eframe::egui::Color32;
+use std::sync::Arc;
+use tracing_subscriber::Layer;
 
 use super::data::ApplicationState;
 
@@ -22,17 +22,19 @@ pub fn human_size(size: u64) -> String {
 pub fn timestamp_to_str(t: i64, date: bool, time: bool) -> String {
 	format!(
 		"{}",
-		DateTime::<Local>::from(DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(t, 0), Utc)).format(
-			if date && time {
-				"%Y/%m/%d %H:%M:%S"
-			} else if date {
-				"%Y/%m/%d"
-			} else if time {
-				"%H:%M:%S"
-			} else {
-				"%s"
-			}
-		)
+		DateTime::<Local>::from(DateTime::<Utc>::from_utc(
+			NaiveDateTime::from_timestamp(t, 0),
+			Utc
+		))
+		.format(if date && time {
+			"%Y/%m/%d %H:%M:%S"
+		} else if date {
+			"%Y/%m/%d"
+		} else if time {
+			"%H:%M:%S"
+		} else {
+			"%s"
+		})
 	)
 }
 
@@ -64,21 +66,36 @@ impl InternalLogger {
 	}
 }
 
-impl<S> Layer<S> for InternalLogger where S: tracing::Subscriber {
+impl<S> Layer<S> for InternalLogger
+where
+	S: tracing::Subscriber,
+{
 	fn on_event(
-			&self,
-			event: &tracing::Event<'_>,
-			_ctx: tracing_subscriber::layer::Context<'_, S>,
+		&self,
+		event: &tracing::Event<'_>,
+		_ctx: tracing_subscriber::layer::Context<'_, S>,
 	) {
-		let mut msg_visitor = LogMessageVisitor { msg: "".to_string() };
+		let mut msg_visitor = LogMessageVisitor {
+			msg: "".to_string(),
+		};
 		event.record(&mut msg_visitor);
-		let out = format!("{} [{}] {}: {}", Local::now().format("%H:%M:%S"), event.metadata().level(), event.metadata().target(), msg_visitor.msg);
-		self.state.diagnostics.write().expect("Diagnostics RwLock poisoned").push(out);
+		let out = format!(
+			"{} [{}] {}: {}",
+			Local::now().format("%H:%M:%S"),
+			event.metadata().level(),
+			event.metadata().target(),
+			msg_visitor.msg
+		);
+		self.state
+			.diagnostics
+			.write()
+			.expect("Diagnostics RwLock poisoned")
+			.push(out);
 	}
 }
 
 struct LogMessageVisitor {
-	msg : String,
+	msg: String,
 }
 
 impl tracing::field::Visit for LogMessageVisitor {
