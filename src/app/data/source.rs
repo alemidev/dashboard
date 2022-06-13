@@ -15,6 +15,21 @@ pub struct Panel {
 	pub limit: bool,
 }
 
+impl Default for Panel {
+	fn default() -> Self {
+		Panel {
+			id: -1,
+			name: "".to_string(),
+			view_scroll: true,
+			view_size: 300,
+			timeserie: true,
+			width: 100,
+			height: 200,
+			limit: false,
+		}
+	}
+}
+
 pub struct Source {
 	pub(crate) id: i32,
 	pub name: String,
@@ -29,6 +44,24 @@ pub struct Source {
 	// pub(crate) compiled_query_y: Arc<Mutex<jq_rs::JqProgram>>,
 	pub(crate) panel_id: i32,
 	pub(crate) data: RwLock<Vec<Value>>,
+}
+
+impl Default for Source {
+	fn default() -> Self {
+		Source {
+			id: -1,
+			name: "".to_string(),
+			url: "".to_string(),
+			interval: 60,
+			color: Color32::TRANSPARENT,
+			visible: false,
+			last_fetch: RwLock::new(Utc::now()),
+			query_x: "".to_string(),
+			query_y: "".to_string(),
+			panel_id: -1,
+			data: RwLock::new(Vec::new())
+		}
+	}
 }
 
 impl Source {
