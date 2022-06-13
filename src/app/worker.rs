@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use tracing::warn;
+use crate::app::data::{source::fetch, ApplicationState};
 use chrono::Utc;
 use eframe::egui::Context;
-use crate::app::data::{ApplicationState, source::fetch};
+use std::sync::Arc;
+use tracing::warn;
 
-pub fn native_save(state:Arc<ApplicationState>) {
+pub fn native_save(state: Arc<ApplicationState>) {
 	std::thread::spawn(move || {
 		let storage = state.storage.lock().expect("Storage Mutex poisoned");
 		let panels = state.panels.read().expect("Panels RwLock poisoned");
@@ -43,16 +43,16 @@ pub fn native_save(state:Arc<ApplicationState>) {
 }
 
 pub(crate) trait BackgroundWorker {
-	fn start(state:Arc<ApplicationState>, ctx:Context) -> Self;  // TODO make it return an error? Can we even do anything without a background worker
-	fn stop(self);   // TODO make it return an error? Can we even do anything without a background worker
+	fn start(state: Arc<ApplicationState>, ctx: Context) -> Self; // TODO make it return an error? Can we even do anything without a background worker
+	fn stop(self); // TODO make it return an error? Can we even do anything without a background worker
 }
 
 pub(crate) struct NativeBackgroundWorker {
-	worker : std::thread::JoinHandle<()>,
+	worker: std::thread::JoinHandle<()>,
 }
 
 impl BackgroundWorker for NativeBackgroundWorker {
-	fn start(state:Arc<ApplicationState>, ctx:Context) -> Self {
+	fn start(state: Arc<ApplicationState>, ctx: Context) -> Self {
 		let worker = std::thread::spawn(move || {
 			let mut last_check = 0;
 			while state.run {
@@ -66,25 +66,38 @@ impl BackgroundWorker for NativeBackgroundWorker {
 				for j in 0..sources.len() {
 					let s_id = sources[j].id;
 					if !sources[j].valid() {
-						let mut last_update = sources[j].last_fetch.write().expect("Sources RwLock poisoned");
+						let mut last_update = sources[j]
+							.last_fetch
+							.write()
+							.expect("Sources RwLock poisoned");
 						*last_update = Utc::now();
 						let state2 = state.clone();
 						let url = sources[j].url.clone();
 						let query_x = sources[j].query_x.clone();
 						let query_y = sources[j].query_y.clone();
-						std::thread::spawn(move || { // TODO this can overspawn if a request takes longer than the refresh interval!
+						std::thread::spawn(move || {
+							// TODO this can overspawn if a request takes longer than the refresh interval!
 							match fetch(url.as_str(), query_x.as_str(), query_y.as_str()) {
 								Ok(v) => {
-									let store = state2.storage.lock().expect("Storage mutex poisoned");
+									let store =
+										state2.storage.lock().expect("Storage mutex poisoned");
 									if let Err(e) = store.put_value(s_id, v) {
 										warn!(target:"background-worker", "Could not put sample for source #{} in db: {:?}", s_id, e);
 									} else {
-										let sources = state2.sources.read().expect("Sources RwLock poisoned");
-										sources[j].data.write().expect("Source data RwLock poisoned").push(v);
-										let mut last_update = sources[j].last_fetch.write().expect("Source last update RwLock poisoned");
+										let sources =
+											state2.sources.read().expect("Sources RwLock poisoned");
+										sources[j]
+											.data
+											.write()
+											.expect("Source data RwLock poisoned")
+											.push(v);
+										let mut last_update = sources[j]
+											.last_fetch
+											.write()
+											.expect("Source last update RwLock poisoned");
 										*last_update = Utc::now(); // overwrite it so fetches comply with API slowdowns and get desynched among them
 									}
-								},
+								}
 								Err(e) => {
 									warn!(target:"background-worker", "Could not fetch value from {} : {:?}", url, e);
 								}
@@ -102,12 +115,12 @@ impl BackgroundWorker for NativeBackgroundWorker {
 			}
 		});
 
-		return NativeBackgroundWorker {
-			worker
-		};
+		return NativeBackgroundWorker { worker };
 	}
 
 	fn stop(self) {
-		self.worker.join().expect("Failed joining main worker thread");
+		self.worker
+			.join()
+			.expect("Failed joining main worker thread");
 	}
 }

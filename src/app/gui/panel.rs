@@ -1,7 +1,13 @@
-use chrono::{Utc, Local};
-use eframe::egui::{Ui, Layout, Align, plot::{Plot, Legend, Corner, Line, GridMark}, Slider, DragValue};
+use chrono::{Local, Utc};
+use eframe::egui::{
+	plot::{Corner, GridMark, Legend, Line, Plot},
+	DragValue, Layout, Slider, Ui,
+};
 
-use crate::app::{data::source::{Panel, Source}, util::timestamp_to_str};
+use crate::app::{
+	data::source::{Panel, Source},
+	util::timestamp_to_str,
+};
 
 pub fn panel_edit_inline_ui(ui: &mut Ui, panel: &mut Panel) {
 	eframe::egui::TextEdit::singleline(&mut panel.name)
@@ -27,15 +33,12 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel) {
 				ui.separator();
 				ui.checkbox(&mut panel.timeserie, "timeserie");
 				ui.separator();
-				ui.add(
-					Slider::new(&mut panel.height, 0..=500).text("height"),
-				);
+				ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
 				ui.separator();
 			});
 		});
 	});
 }
-
 
 pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 	let mut p = Plot::new(format!("plot-{}", panel.name))
@@ -44,26 +47,20 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 		.legend(Legend::default().position(Corner::LeftTop));
 
 	if panel.view_scroll {
-		p = p
-			.include_x(Utc::now().timestamp() as f64);
+		p = p.include_x(Utc::now().timestamp() as f64);
 		if panel.limit {
 			p = p
-			.set_margin_fraction(eframe::emath::Vec2{x:0.0, y:0.1})
-			.include_x((Utc::now().timestamp() + ( panel.view_size as i64 * 3)) as f64);
+				.set_margin_fraction(eframe::emath::Vec2 { x: 0.0, y: 0.1 })
+				.include_x((Utc::now().timestamp() + (panel.view_size as i64 * 3)) as f64);
 		}
 		if panel.limit {
-			p = p.include_x(
-				(Utc::now().timestamp() - (panel.view_size as i64 * 60))
-					as f64,
-			);
+			p = p.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64);
 		}
 	}
 
 	if panel.timeserie {
 		p = p
-			.x_axis_formatter(|x, _range| {
-				timestamp_to_str(x as i64, true, false)
-			})
+			.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false))
 			.label_formatter(|name, value| {
 				if !name.is_empty() {
 					return format!(
@@ -111,8 +108,7 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 			if source.visible && source.panel_id == panel.id {
 				let line = if panel.limit {
 					Line::new(source.values_filter(
-						(Utc::now().timestamp()
-							- (panel.view_size as i64 * 60)) as f64,
+						(Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64,
 					))
 					.name(source.name.as_str())
 				} else {

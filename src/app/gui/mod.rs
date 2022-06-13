@@ -1,2 +1,2 @@
-pub mod source;
 pub mod panel;
+pub mod source;

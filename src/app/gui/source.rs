@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::Ui;
 
-use crate::app::data::source::{Source, Panel};
+use crate::app::data::source::{Panel, Source};
 
 pub fn source_edit_inline_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Panel>) {
 	eframe::egui::TextEdit::singleline(&mut source.name)
@@ -25,18 +25,13 @@ pub fn source_edit_inline_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Pane
 		.width(70.0)
 		.show_ui(ui, |ui| {
 			for p in panels {
-				ui.selectable_value(
-					&mut source.panel_id,
-					p.id,
-					p.name.as_str(),
-				);
+				ui.selectable_value(&mut source.panel_id, p.id, p.name.as_str());
 			}
 		});
 	ui.checkbox(&mut source.visible, "visible");
 	ui.add(egui::Slider::new(&mut source.interval, 1..=60));
 	ui.color_edit_button_srgba(&mut source.color);
 }
-
 
 pub fn source_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Panel>) {
 	ui.group(|ui| {
@@ -66,11 +61,7 @@ pub fn source_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Panel>) {
 				.width(70.0)
 				.show_ui(ui, |ui| {
 					for p in panels {
-						ui.selectable_value(
-							&mut source.panel_id,
-							p.id,
-							p.name.as_str(),
-						);
+						ui.selectable_value(&mut source.panel_id, p.id, p.name.as_str());
 					}
 				});
 			ui.color_edit_button_srgba(&mut source.color);
