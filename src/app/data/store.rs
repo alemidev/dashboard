@@ -1,9 +1,12 @@
-use crate::app::{data::source::{Panel, Source}, util::repack_color};
+use crate::app::util::unpack_color;
+use crate::app::{
+	data::source::{Panel, Source},
+	util::repack_color,
+};
 use chrono::{TimeZone, Utc};
-use eframe::egui::{Color32, plot::Value};
+use eframe::egui::{plot::Value, Color32};
 use rusqlite::{params, Connection};
 use std::sync::RwLock;
-use crate::app::util::unpack_color;
 
 pub trait DataStorage {
 	fn add_panel(&self, name: &str);
@@ -60,8 +63,6 @@ impl SQLiteDataStore {
 		Ok(SQLiteDataStore { conn })
 	}
 
-	
-
 	pub fn load_values(&self, source_id: i32) -> rusqlite::Result<Vec<Value>> {
 		let mut values: Vec<Value> = Vec::new();
 		let mut statement = self
@@ -90,13 +91,9 @@ impl SQLiteDataStore {
 		)
 	}
 
-
-
 	pub fn load_sources(&self) -> rusqlite::Result<Vec<Source>> {
 		let mut sources: Vec<Source> = Vec::new();
-		let mut statement = self
-			.conn
-			.prepare("SELECT * FROM sources")?;
+		let mut statement = self.conn.prepare("SELECT * FROM sources")?;
 		let sources_iter = statement.query_map([], |row| {
 			Ok(Source {
 				id: row.get(0)?,
@@ -134,7 +131,11 @@ impl SQLiteDataStore {
 		color: Color32,
 		visible: bool,
 	) -> rusqlite::Result<Source> {
-		let color_u32 : Option<u32> = if color == Color32::TRANSPARENT { None } else { Some(repack_color(color)) };
+		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
+			None
+		} else {
+			Some(repack_color(color))
+		};
 		self.conn.execute(
 			"INSERT INTO sources(name, url, interval, query_x, query_y, panel_id, color, visible) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			params![name, url, 60i32, query_x, query_y, panel_id, color_u32, visible],
@@ -177,7 +178,11 @@ impl SQLiteDataStore {
 		color: Color32,
 		visible: bool,
 	) -> rusqlite::Result<usize> {
-		let color_u32 : Option<u32> = if color == Color32::TRANSPARENT { None } else { Some(repack_color(color)) };
+		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
+			None
+		} else {
+			Some(repack_color(color))
+		};
 		self.conn.execute(
 			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, visible = ? WHERE id = ?",
 			params![name, url, interval, query_x, query_y, panel_id, color_u32, visible, source_id],
@@ -190,7 +195,9 @@ impl SQLiteDataStore {
 
 	pub fn load_panels(&self) -> rusqlite::Result<Vec<Panel>> {
 		let mut panels: Vec<Panel> = Vec::new();
-		let mut statement = self.conn.prepare("SELECT * FROM panels ORDER BY position")?;
+		let mut statement = self
+			.conn
+			.prepare("SELECT * FROM panels ORDER BY position")?;
 		let panels_iter = statement.query_map([], |row| {
 			Ok(Panel {
 				id: row.get(0)?,
@@ -214,7 +221,14 @@ impl SQLiteDataStore {
 	}
 
 	// jank! TODO make it not jank!
-	pub fn new_panel(&self, name: &str, view_size:i32, width: i32, height: i32, position: i32) -> rusqlite::Result<Panel> {
+	pub fn new_panel(
+		&self,
+		name: &str,
+		view_size: i32,
+		width: i32,
+		height: i32,
+		position: i32,
+	) -> rusqlite::Result<Panel> {
 		self.conn.execute(
 			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			params![name, true, view_size, true, width, height, false, position]
@@ -260,7 +274,4 @@ impl SQLiteDataStore {
 	// pub fn delete_panel(&self, id:i32) -> rusqlite::Result<usize> {
 	// 	self.conn.execute("DELETE FROM panels WHERE id = ?", params![id])
 	// }
-
-
-
 }

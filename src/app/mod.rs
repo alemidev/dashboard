@@ -3,21 +3,15 @@ pub mod gui;
 pub mod util;
 pub mod worker;
 
-use chrono::{Local, Utc};
 use eframe::egui;
-use eframe::egui::plot::GridMark;
-use eframe::egui::{
-	plot::{Line, Plot},
-	Color32,
-};
 use std::sync::Arc;
 use tracing::error;
 
+use self::data::source::{Panel, Source};
 use self::data::ApplicationState;
-use self::data::source::{Panel,Source};
-use self::gui::panel::{panel_edit_inline_ui, panel_title_ui, panel_body_ui};
-use self::gui::source::{source_ui, source_edit_inline_ui};
-use self::util::{human_size, timestamp_to_str};
+use self::gui::panel::{panel_body_ui, panel_edit_inline_ui, panel_title_ui};
+use self::gui::source::{source_edit_inline_ui, source_ui};
+use self::util::human_size;
 use self::worker::native_save;
 
 pub struct App {
@@ -61,7 +55,11 @@ impl eframe::App for App {
 					}
 					ui.separator();
 					ui.label("+ source");
-					source_edit_inline_ui(ui, &mut self.input_source, &self.data.panels.read().expect("Panels RwLock poisoned"));
+					source_edit_inline_ui(
+						ui,
+						&mut self.input_source,
+						&self.data.panels.read().expect("Panels RwLock poisoned"),
+					);
 					if ui.button("add").clicked() {
 						if let Err(e) = self.data.add_source(&self.input_source) {
 							error!(target: "ui", "Error adding souce : {:?}", e);
@@ -154,22 +152,22 @@ impl eframe::App for App {
 						ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
 						true,
 					)
-						.show_header(ui, |ui| {
-							if self.edit {
-								if ui.small_button(" + ").clicked() {
-									if index > 0 {
-										to_swap.push(index); // TODO kinda jank but is there a better way?
-									}
-								}
-								if ui.small_button(" - ").clicked() {
-									if index < panels_count - 1 {
-										to_swap.push(index + 1); // TODO kinda jank but is there a better way?
-									}
+					.show_header(ui, |ui| {
+						if self.edit {
+							if ui.small_button(" + ").clicked() {
+								if index > 0 {
+									to_swap.push(index); // TODO kinda jank but is there a better way?
 								}
 							}
-							panel_title_ui(ui, panel);
-						})
-						.body(|ui| panel_body_ui(ui, panel, &sources));
+							if ui.small_button(" - ").clicked() {
+								if index < panels_count - 1 {
+									to_swap.push(index + 1); // TODO kinda jank but is there a better way?
+								}
+							}
+						}
+						panel_title_ui(ui, panel);
+					})
+					.body(|ui| panel_body_ui(ui, panel, &sources));
 				}
 			});
 		});
