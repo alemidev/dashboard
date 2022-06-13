@@ -62,23 +62,23 @@ impl ApplicationState {
 		});
 	}
 
-	pub fn add_panel(&self, name:&str) -> Result<(), FetchError> {
-		let panel = self.storage.lock().expect("Storage Mutex poisoned")
+	pub fn add_panel(&self, panel: &Panel) -> Result<(), FetchError> {
+		let verified_panel = self.storage.lock().expect("Storage Mutex poisoned")
 			.new_panel(
-				name,
-				100,
-				200,
-				280,
+				panel.name.as_str(),
+				panel.view_size,
+				panel.width,
+				panel.height,
 				self.panels.read().expect("Panels RwLock poisoned").len() as i32 // todo can this be made more compact and without acquisition?
 			)?; // TODO make values customizable and useful
-		self.panels.write().expect("Panels RwLock poisoned").push(panel);
+		self.panels.write().expect("Panels RwLock poisoned").push(verified_panel);
 		Ok(())
 	}
 
-	pub fn add_source(&self, panel_id:i32, name:&str, url:&str, query_x:&str, query_y:&str, color:Color32, visible:bool) -> Result<(), FetchError> {
-		let source = self.storage.lock().expect("Storage Mutex poisoned")
-			.new_source(panel_id, name, url, query_x, query_y, color, visible)?;
-		self.sources.write().expect("Sources RwLock poisoned").push(source);
+	pub fn add_source(&self, source: &Source) -> Result<(), FetchError> {
+		let verified_source = self.storage.lock().expect("Storage Mutex poisoned")
+			.new_source(source.panel_id, source.name.as_str(), source.url.as_str(), source.query_x.as_str(), source.query_y.as_str(), source.color, source.visible)?;
+		self.sources.write().expect("Sources RwLock poisoned").push(verified_source);
 		return Ok(());
 	}
 }
