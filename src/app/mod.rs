@@ -300,6 +300,11 @@ impl eframe::App for App {
 							p = p
 								.include_x(Utc::now().timestamp() as f64);
 							if panel.limit {
+								p = p
+								.set_margin_fraction(eframe::emath::Vec2{x:0.0, y:0.1})
+								.include_x((Utc::now().timestamp() + ( panel.view_size as i64 * 3)) as f64);
+							}
+							if panel.limit {
 								p = p.include_x(
 									(Utc::now().timestamp() - (panel.view_size as i64 * 60))
 										as f64,
