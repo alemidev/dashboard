@@ -12,7 +12,7 @@ use crate::app::{
 pub fn panel_edit_inline_ui(ui: &mut Ui, panel: &mut Panel) {
 	TextEdit::singleline(&mut panel.name)
 		.hint_text("name")
-		.desired_width(50.0)
+		.desired_width(100.0)
 		.show(ui);
 }
 
