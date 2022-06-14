@@ -1,8 +1,8 @@
 use chrono::{Local, Utc};
-use eframe::egui::{
+use eframe::{egui::{
 	plot::{Corner, GridMark, Legend, Line, Plot},
-	DragValue, Layout, Slider, Ui,
-};
+	DragValue, Layout, Ui, Slider, TextEdit,
+}, emath::Vec2};
 
 use crate::app::{
 	data::source::{Panel, Source},
@@ -10,13 +10,13 @@ use crate::app::{
 };
 
 pub fn panel_edit_inline_ui(ui: &mut Ui, panel: &mut Panel) {
-	eframe::egui::TextEdit::singleline(&mut panel.name)
+	TextEdit::singleline(&mut panel.name)
 		.hint_text("name")
 		.desired_width(50.0)
 		.show(ui);
 }
 
-pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel) {
+pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
 	ui.horizontal(|ui| {
 		ui.heading(panel.name.as_str());
 		ui.with_layout(Layout::right_to_left(), |ui| {
@@ -30,11 +30,12 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel) {
 						.clamp_range(0..=2147483647i32),
 				);
 				ui.checkbox(&mut panel.limit, "limit");
-				ui.separator();
-				ui.checkbox(&mut panel.timeserie, "timeserie");
-				ui.separator();
-				ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
-				ui.separator();
+				if extra {
+					ui.separator();
+					ui.checkbox(&mut panel.timeserie, "timeserie");
+					ui.separator();
+					ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
+				}
 			});
 		});
 	});
@@ -50,7 +51,7 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 		p = p.include_x(Utc::now().timestamp() as f64);
 		if panel.limit {
 			p = p
-				.set_margin_fraction(eframe::emath::Vec2 { x: 0.0, y: 0.1 })
+				.set_margin_fraction(Vec2 { x: 0.0, y: 0.1 })
 				.include_x((Utc::now().timestamp() + (panel.view_size as i64 * 3)) as f64);
 		}
 		if panel.limit {
