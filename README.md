@@ -1,6 +1,9 @@
 # dashboard
 A data aggregating dashboard, capable of periodically fetching, parsing, archiving and plotting data.
 
+## Name
+Do you have a good name idea for this project? [Let me know](https://alemi.dev/suggestions/What%27s%20a%20good%20name%20for%20the%20project%3F)!
+
 ## Features
 
 ## Usage
