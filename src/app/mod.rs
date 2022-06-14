@@ -109,9 +109,11 @@ impl eframe::App for App {
 						.diagnostics
 						.read()
 						.expect("Diagnostics RwLock poisoned");
+					ui.separator();
 					for msg in msgs.iter() {
 						ui.label(msg);
 					}
+					ui.separator();
 				});
 			});
 		});
