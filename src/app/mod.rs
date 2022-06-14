@@ -3,14 +3,18 @@ pub mod gui;
 pub mod util;
 pub mod worker;
 
-use eframe::egui;
+use eframe::egui::{
+	global_dark_light_mode_switch, CentralPanel, Context, Layout, ScrollArea, SidePanel,
+	TopBottomPanel, collapsing_header::CollapsingState,
+};
+use eframe::emath::Align;
 use std::sync::Arc;
 use tracing::error;
 
 use self::data::source::{Panel, Source};
 use self::data::ApplicationState;
 use self::gui::panel::{panel_body_ui, panel_edit_inline_ui, panel_title_ui};
-use self::gui::source::{source_edit_inline_ui, source_ui};
+use self::gui::source::{source_edit_inline_ui, source_edit_ui};
 use self::util::human_size;
 use self::worker::native_save;
 
@@ -33,10 +37,10 @@ impl App {
 }
 
 impl eframe::App for App {
-	fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-		egui::TopBottomPanel::top("heading").show(ctx, |ui| {
+	fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+		TopBottomPanel::top("heading").show(ctx, |ui| {
 			ui.horizontal(|ui| {
-				egui::widgets::global_dark_light_mode_switch(ui);
+				global_dark_light_mode_switch(ui);
 				ui.heading("dashboard");
 				ui.separator();
 				ui.checkbox(&mut self.edit, "edit");
@@ -67,7 +71,7 @@ impl eframe::App for App {
 					}
 					ui.separator();
 				}
-				ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+				ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 					ui.horizontal(|ui| {
 						if ui.small_button("×").clicked() {
 							frame.quit();
@@ -76,8 +80,8 @@ impl eframe::App for App {
 				});
 			});
 		});
-		egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
-			egui::collapsing_header::CollapsingState::load_with_default_open(
+		TopBottomPanel::bottom("footer").show(ctx, |ui| {
+			CollapsingState::load_with_default_open(
 				ctx,
 				ui.make_persistent_id("footer-logs"),
 				false,
@@ -93,7 +97,7 @@ impl eframe::App for App {
 							.read()
 							.expect("Filesize RwLock poisoned"),
 					));
-					ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+					ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 						ui.horizontal(|ui| {
 							ui.label(format!(
 								"v{}-{}",
@@ -109,7 +113,7 @@ impl eframe::App for App {
 			})
 			.body(|ui| {
 				ui.set_height(200.0);
-				egui::ScrollArea::vertical().show(ui, |ui| {
+				ScrollArea::vertical().show(ui, |ui| {
 					let msgs = self
 						.data
 						.diagnostics
@@ -122,24 +126,28 @@ impl eframe::App for App {
 			});
 		});
 		if self.edit {
-			egui::SidePanel::left("sources-bar").show(ctx, |ui| {
-				let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
-				let panels = self.data.panels.read().expect("Panels RwLock poisoned");
-				egui::ScrollArea::vertical().show(ui, |ui| {
-					for source in &mut *sources {
-						source_ui(ui, source, &panels);
-					}
-					// TODO make this not necessary
-					ui.collapsing("extra space", |ui| {
-						ui.add_space(300.0);
-						ui.separator();
-					})
+			SidePanel::left("sources-bar")
+				.width_range(240.0..=800.0)
+				.default_width(500.0)
+				.show(ctx, |ui| {
+					let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
+					let panels = self.data.panels.read().expect("Panels RwLock poisoned");
+					ScrollArea::vertical().show(ui, |ui| {
+						let width = ui.available_width();
+						for source in &mut *sources {
+							source_edit_ui(ui, source, &panels, width);
+						}
+						// TODO make this not necessary
+						ui.collapsing("extra space", |ui| {
+							ui.add_space(300.0);
+							ui.separator();
+						})
+					});
 				});
-			});
 		}
 		let mut to_swap: Vec<usize> = Vec::new();
-		egui::CentralPanel::default().show(ctx, |ui| {
-			egui::ScrollArea::vertical().show(ui, |ui| {
+		CentralPanel::default().show(ctx, |ui| {
+			ScrollArea::vertical().show(ui, |ui| {
 				let mut panels = self.data.panels.write().expect("Panels RwLock poisoned"); // TODO only lock as write when editing
 				let panels_count = panels.len();
 				let sources = self.data.sources.read().expect("Sources RwLock poisoned"); // TODO only lock as write when editing
@@ -147,7 +155,7 @@ impl eframe::App for App {
 					if index > 0 {
 						ui.separator();
 					}
-					egui::collapsing_header::CollapsingState::load_with_default_open(
+					CollapsingState::load_with_default_open(
 						ctx,
 						ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
 						true,
@@ -164,8 +172,9 @@ impl eframe::App for App {
 									to_swap.push(index + 1); // TODO kinda jank but is there a better way?
 								}
 							}
+							ui.separator();
 						}
-						panel_title_ui(ui, panel);
+						panel_title_ui(ui, panel, self.edit);
 					})
 					.body(|ui| panel_body_ui(ui, panel, &sources));
 				}
