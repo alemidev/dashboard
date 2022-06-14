@@ -2,6 +2,7 @@ use eframe::egui::{Ui, TextEdit, ComboBox, Slider, DragValue};
 
 use crate::app::data::source::{Panel, Source};
 
+#[allow(dead_code)]
 pub fn source_edit_inline_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Panel>) {
 	TextEdit::singleline(&mut source.name)
 		.hint_text("name")
@@ -49,11 +50,11 @@ pub fn source_edit_ui(ui: &mut Ui, source: &mut Source, panels: &Vec<Panel>, wid
 		ui.horizontal(|ui| {
 			let text_width : f32 ;
 			if width > 400.0 {
-				ui.add(Slider::new(&mut source.interval, 1..=60));
+				ui.add(Slider::new(&mut source.interval, 1..=120));
 				text_width = width - 330.0
 			} else {
-				ui.add(DragValue::new(&mut source.interval).clamp_range(1..=60));
-				text_width = width - 220.0
+				ui.add(DragValue::new(&mut source.interval).clamp_range(1..=120));
+				text_width = width - 225.0
 			}
 			TextEdit::singleline(&mut source.query_x)
 				.desired_width(text_width / 2.0)
