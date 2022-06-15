@@ -78,6 +78,7 @@ impl eframe::App for App {
 			)
 			.show_header(ui, |ui| {
 				ui.horizontal(|ui| {
+					ui.separator();
 					ui.label(self.data.file_path.to_str().unwrap()); // TODO maybe calculate it just once?
 					ui.separator();
 					ui.label(human_size(
@@ -118,17 +119,36 @@ impl eframe::App for App {
 			});
 		});
 		if self.edit {
+			let mut to_swap: Option<usize> = None;
+			// let mut to_delete: Option<usize> = None;
 			SidePanel::left("sources-bar")
-				.width_range(240.0..=800.0)
+				.width_range(280.0..=800.0)
 				.default_width(500.0)
 				.show(ctx, |ui| {
 					let panels = self.data.panels.read().expect("Panels RwLock poisoned");
 					ScrollArea::vertical().show(ui, |ui| {
-						let width = ui.available_width();
+						let panel_width = ui.available_width();
 						{
 							let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
-							for source in &mut *sources {
-								source_edit_ui(ui, source, &panels, width);
+							let sources_count = sources.len();
+							for (index, source) in sources.iter_mut().enumerate() {
+								ui.horizontal(|ui| {
+									ui.vertical(|ui| {
+										ui.add_space(10.0);
+										if ui.small_button("+").clicked() {
+											if index > 0 {
+												to_swap = Some(index); // TODO kinda jank but is there a better way?
+											}
+										}
+										if ui.small_button("−").clicked() {
+											if index < sources_count - 1 {
+												to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
+											}
+										}
+									});
+									let remaining_width = ui.available_width();
+									source_edit_ui(ui, source, &panels, remaining_width);
+								});
 							}
 						}
 						ui.add_space(20.0);
@@ -148,14 +168,25 @@ impl eframe::App for App {
 									});
 								});
 						});
-						source_edit_ui(ui, &mut self.input_source, &panels, width);
+						source_edit_ui(ui, &mut self.input_source, &panels, panel_width);
 						if self.padding {
 							ui.add_space(300.0);
 						}
 					});
 				});
+			//if let Some(i) = to_delete {
+			//	// TODO can this be done in background? idk
+			//	let mut panels = self.data.panels.write().expect("Panels RwLock poisoned");
+			//	panels.remove(i);
+			// } else
+			if let Some(i) = to_swap {
+				// TODO can this be done in background? idk
+				let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
+				sources.swap(i - 1, i);
+			}
 		}
-		let mut to_swap: Vec<usize> = Vec::new();
+		let mut to_swap: Option<usize> = None;
+		let mut to_delete: Option<usize> = None;
 		CentralPanel::default().show(ctx, |ui| {
 			ScrollArea::vertical().show(ui, |ui| {
 				let mut panels = self.data.panels.write().expect("Panels RwLock poisoned"); // TODO only lock as write when editing
@@ -174,13 +205,16 @@ impl eframe::App for App {
 						if self.edit {
 							if ui.small_button(" + ").clicked() {
 								if index > 0 {
-									to_swap.push(index); // TODO kinda jank but is there a better way?
+									to_swap = Some(index); // TODO kinda jank but is there a better way?
 								}
 							}
-							if ui.small_button(" - ").clicked() {
+							if ui.small_button(" − ").clicked() {
 								if index < panels_count - 1 {
-									to_swap.push(index + 1); // TODO kinda jank but is there a better way?
+									to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
 								}
+							}
+							if ui.small_button(" × ").clicked() {
+								to_delete = Some(index); // TODO kinda jank but is there a better way?
 							}
 							ui.separator();
 						}
@@ -190,12 +224,18 @@ impl eframe::App for App {
 				}
 			});
 		});
-		if !to_swap.is_empty() {
+		if let Some(i) = to_delete {
 			// TODO can this be done in background? idk
 			let mut panels = self.data.panels.write().expect("Panels RwLock poisoned");
-			for index in to_swap {
-				panels.swap(index - 1, index);
+			if let Err(e) = self.data.storage.lock().expect("Storage Mutex poisoned").delete_panel(panels[i].id) {
+				error!(target: "ui", "Could not delete panel : {:?}", e);
+			} else {
+				panels.remove(i);
 			}
+		} else if let Some(i) = to_swap {
+			// TODO can this be done in background? idk
+			let mut panels = self.data.panels.write().expect("Panels RwLock poisoned");
+			panels.swap(i - 1, i);
 		}
 	}
 }

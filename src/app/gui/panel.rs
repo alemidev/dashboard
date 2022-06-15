@@ -47,15 +47,16 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 		.allow_scroll(false)
 		.legend(Legend::default().position(Corner::LeftTop));
 
+	if panel.limit {
+		p = p.set_margin_fraction(Vec2 { x: 0.0, y: 0.1 });
+	}
+
 	if panel.view_scroll {
 		p = p.include_x(Utc::now().timestamp() as f64);
 		if panel.limit {
 			p = p
-				.set_margin_fraction(Vec2 { x: 0.0, y: 0.1 })
-				.include_x((Utc::now().timestamp() + (panel.view_size as i64 * 3)) as f64);
-		}
-		if panel.limit {
-			p = p.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64);
+				.include_x((Utc::now().timestamp() + (panel.view_size as i64 * 3)) as f64)
+				.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64); // ??? TODO
 		}
 	}
 
@@ -106,7 +107,7 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 
 	p.show(ui, |plot_ui| {
 		for source in &*sources {
-			if source.visible && source.panel_id == panel.id {
+			if source.panel_id == panel.id {
 				let line = if panel.limit {
 					Line::new(source.values_filter(
 						(Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64,

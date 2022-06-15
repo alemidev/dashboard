@@ -23,17 +23,18 @@ pub fn native_save(state: Arc<ApplicationState>) {
 				warn!(target: "native-save", "Could not update panel #{} : {:?}", panel.id, e);
 			}
 			let sources = state.sources.read().expect("Sources RwLock poisoned");
-			for source in &*sources {
+			for (index, source) in sources.iter().enumerate() {
 				if let Err(e) = storage.update_source(
 					source.id,
 					source.panel_id,
 					source.name.as_str(),
+					source.enabled,
 					source.url.as_str(),
 					source.interval,
 					source.query_x.as_str(),
 					source.query_y.as_str(),
 					source.color,
-					source.visible,
+					index as i32,
 				) {
 					warn!(target: "native-save", "Could not update source #{} : {:?}", source.id, e);
 				}
@@ -65,7 +66,7 @@ impl BackgroundWorker for NativeBackgroundWorker {
 				let sources = state.sources.read().expect("Sources RwLock poisoned");
 				for j in 0..sources.len() {
 					let s_id = sources[j].id;
-					if !sources[j].valid() {
+					if sources[j].enabled && !sources[j].valid() {
 						let mut last_update = sources[j]
 							.last_fetch
 							.write()

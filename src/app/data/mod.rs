@@ -99,11 +99,13 @@ impl ApplicationState {
 			.new_source(
 				source.panel_id,
 				source.name.as_str(),
+				source.enabled,
 				source.url.as_str(),
+				source.interval,
 				source.query_x.as_str(),
 				source.query_y.as_str(),
 				source.color,
-				source.visible,
+				self.sources.read().expect("Sources RwLock poisoned").len() as i32,
 			)?;
 		self.sources
 			.write()
