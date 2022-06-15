@@ -33,10 +33,10 @@ impl Default for Panel {
 pub struct Source {
 	pub(crate) id: i32,
 	pub name: String,
+	pub enabled: bool,
 	pub url: String,
 	pub interval: i32,
 	pub color: Color32,
-	pub visible: bool,
 	pub(crate) last_fetch: RwLock<DateTime<Utc>>,
 	pub query_x: String,
 	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,
@@ -51,10 +51,10 @@ impl Default for Source {
 		Source {
 			id: -1,
 			name: "".to_string(),
+			enabled: false,
 			url: "".to_string(),
 			interval: 60,
 			color: Color32::TRANSPARENT,
-			visible: false,
 			last_fetch: RwLock::new(Utc::now()),
 			query_x: "".to_string(),
 			query_y: "".to_string(),

@@ -39,13 +39,14 @@ impl SQLiteDataStore {
 			"CREATE TABLE IF NOT EXISTS sources (
 				id INTEGER PRIMARY KEY,
 				name TEXT NOT NULL,
+				enabled BOOL NOT NULL,
 				url TEXT NOT NULL,
 				interval INT NOT NULL,
 				query_x TEXT NOT NULL,
 				query_y TEXT NOT NULL,
 				panel_id INT NOT NULL,
 				color INT NULL,
-				visible BOOL NOT NULL
+				position INT NOT NULL
 			);",
 			[],
 		)?;
@@ -93,19 +94,19 @@ impl SQLiteDataStore {
 
 	pub fn load_sources(&self) -> rusqlite::Result<Vec<Source>> {
 		let mut sources: Vec<Source> = Vec::new();
-		let mut statement = self.conn.prepare("SELECT * FROM sources")?;
+		let mut statement = self.conn.prepare("SELECT * FROM sources ORDER BY position")?;
 		let sources_iter = statement.query_map([], |row| {
 			Ok(Source {
 				id: row.get(0)?,
 				name: row.get(1)?,
-				url: row.get(2)?,
-				interval: row.get(3)?,
+				enabled: row.get(2)?,
+				url: row.get(3)?,
+				interval: row.get(4)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
-				query_x: row.get(4)?,
-				query_y: row.get(5)?,
-				panel_id: row.get(6)?,
-				color: unpack_color(row.get(7).unwrap_or(0)),
-				visible: row.get(8)?,
+				query_x: row.get(5)?,
+				query_y: row.get(6)?,
+				panel_id: row.get(7)?,
+				color: unpack_color(row.get(8).unwrap_or(0)),
 				data: RwLock::new(Vec::new()),
 			})
 		})?;
@@ -125,11 +126,13 @@ impl SQLiteDataStore {
 		&self,
 		panel_id: i32,
 		name: &str,
+		enabled: bool,
 		url: &str,
+		interval: i32,
 		query_x: &str,
 		query_y: &str,
 		color: Color32,
-		visible: bool,
+		position: i32,
 	) -> rusqlite::Result<Source> {
 		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
 			None
@@ -137,8 +140,8 @@ impl SQLiteDataStore {
 			Some(repack_color(color))
 		};
 		self.conn.execute(
-			"INSERT INTO sources(name, url, interval, query_x, query_y, panel_id, color, visible) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			params![name, url, 60i32, query_x, query_y, panel_id, color_u32, visible],
+			"INSERT INTO sources(name, enabled, url, interval, query_x, query_y, panel_id, color, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			params![name, enabled, url, interval, query_x, query_y, panel_id, color_u32, position],
 		)?;
 		let mut statement = self
 			.conn
@@ -147,14 +150,14 @@ impl SQLiteDataStore {
 			Ok(Source {
 				id: row.get(0)?,
 				name: row.get(1)?,
-				url: row.get(2)?,
-				interval: row.get(3)?,
+				enabled: row.get(2)?,
+				url: row.get(3)?,
+				interval: row.get(4)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
-				query_x: row.get(4)?,
-				query_y: row.get(5)?,
-				panel_id: row.get(6)?,
-				color: unpack_color(row.get(7).unwrap_or(0)),
-				visible: row.get(8)?,
+				query_x: row.get(5)?,
+				query_y: row.get(6)?,
+				panel_id: row.get(7)?,
+				color: unpack_color(row.get(8).unwrap_or(0)),
 				data: RwLock::new(Vec::new()),
 			})
 		})? {
@@ -171,12 +174,13 @@ impl SQLiteDataStore {
 		source_id: i32,
 		panel_id: i32,
 		name: &str,
+		enabled: bool,
 		url: &str,
 		interval: i32,
 		query_x: &str,
 		query_y: &str,
 		color: Color32,
-		visible: bool,
+		position: i32,
 	) -> rusqlite::Result<usize> {
 		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
 			None
@@ -184,8 +188,8 @@ impl SQLiteDataStore {
 			Some(repack_color(color))
 		};
 		self.conn.execute(
-			"UPDATE sources SET name = ?, url = ?, interval = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, visible = ? WHERE id = ?",
-			params![name, url, interval, query_x, query_y, panel_id, color_u32, visible, source_id],
+			"UPDATE sources SET name = ?, enabled = ?, url = ?, interval = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, position = ? WHERE id = ?",
+			params![name, enabled, url, interval, query_x, query_y, panel_id, color_u32, position, source_id],
 		)
 	}
 
@@ -271,7 +275,7 @@ impl SQLiteDataStore {
 		)
 	}
 
-	// pub fn delete_panel(&self, id:i32) -> rusqlite::Result<usize> {
-	// 	self.conn.execute("DELETE FROM panels WHERE id = ?", params![id])
-	// }
+	pub fn delete_panel(&self, id:i32) -> rusqlite::Result<usize> {
+		self.conn.execute("DELETE FROM panels WHERE id = ?", params![id])
+	}
 }
