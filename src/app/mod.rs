@@ -230,6 +230,11 @@ impl eframe::App for App {
 			if let Err(e) = self.data.storage.lock().expect("Storage Mutex poisoned").delete_panel(panels[i].id) {
 				error!(target: "ui", "Could not delete panel : {:?}", e);
 			} else {
+				for source in self.data.sources.write().expect("Sources RwLock poisoned").iter_mut() {
+					if source.panel_id == panels[i].id {
+						source.panel_id = -1;
+					}
+				}
 				panels.remove(i);
 			}
 		} else if let Some(i) = to_swap {
