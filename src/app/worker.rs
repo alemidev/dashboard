@@ -14,10 +14,14 @@ pub fn native_save(state: Arc<ApplicationState>) {
 				panel.name.as_str(),
 				panel.view_scroll,
 				panel.view_size,
+				panel.view_chunks,
+				panel.view_offset,
 				panel.timeserie,
 				panel.width,
 				panel.height,
 				panel.limit,
+				panel.reduce,
+				panel.shift,
 				index as i32,
 			) {
 				warn!(target: "native-save", "Could not update panel #{} : {:?}", panel.id, e);

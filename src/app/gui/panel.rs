@@ -21,15 +21,37 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
 		ui.heading(panel.name.as_str());
 		ui.with_layout(Layout::right_to_left(), |ui| {
 			ui.horizontal(|ui| {
-				ui.toggle_value(&mut panel.view_scroll, " • ");
+				ui.toggle_value(&mut panel.view_scroll, "🔒");
 				ui.separator();
-				ui.label("m");
-				ui.add(
-					DragValue::new(&mut panel.view_size)
-						.speed(10)
-						.clamp_range(0..=2147483647i32),
-				);
-				ui.checkbox(&mut panel.limit, "limit");
+				if panel.limit {
+					ui.label("min"); // TODO makes no sense if it's not a timeserie
+					ui.add(
+						DragValue::new(&mut panel.view_size)
+							.speed(10)
+							.clamp_range(0..=2147483647i32),
+					);
+				}
+				ui.toggle_value(&mut panel.limit, "limit");
+				ui.separator();
+				if panel.shift {
+					ui.label("min");
+					ui.add(
+						DragValue::new(&mut panel.view_offset)
+							.speed(10)
+							.clamp_range(0..=2147483647i32),
+					);
+				}
+				ui.toggle_value(&mut panel.shift, "offset");
+				ui.separator();
+				if panel.reduce {
+					ui.label("x");
+					ui.add(
+						DragValue::new(&mut panel.view_chunks)
+							.speed(1)
+							.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
+					);
+				}
+				ui.toggle_value(&mut panel.reduce, "reduce");
 				if extra {
 					ui.separator();
 					ui.checkbox(&mut panel.timeserie, "timeserie");
@@ -52,11 +74,12 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 	}
 
 	if panel.view_scroll {
-		p = p.include_x(Utc::now().timestamp() as f64);
+		let _now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
+		p = p.include_x(_now);
 		if panel.limit {
 			p = p
-				.include_x((Utc::now().timestamp() + (panel.view_size as i64 * 3)) as f64)
-				.include_x((Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64); // ??? TODO
+				.include_x(_now + (panel.view_size as f64 * 3.0))
+				.include_x(_now - (panel.view_size as f64 * 60.0)); // ??? TODO
 		}
 	}
 
@@ -106,16 +129,16 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 	}
 
 	p.show(ui, |plot_ui| {
-		for source in &*sources {
+		for source in sources {
 			if source.panel_id == panel.id {
-				let line = if panel.limit {
-					Line::new(source.values_filter(
-						(Utc::now().timestamp() - (panel.view_size as i64 * 60)) as f64,
-					))
-					.name(source.name.as_str())
-				} else {
-					Line::new(source.values()).name(source.name.as_str())
-				};
+				let _now = Utc::now().timestamp() as f64;
+				let _off = (panel.view_offset as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+				let _size = (panel.view_size as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+				let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
+				let max_x = if panel.shift { Some(_now - _off) } else { None };
+				let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
+				// let chunks = None;
+				let line = Line::new(source.values(min_x, max_x, chunk_size)).name(source.name.as_str());
 				plot_ui.line(line.color(source.color));
 			}
 		}
