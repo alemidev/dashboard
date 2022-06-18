@@ -30,7 +30,11 @@ impl SQLiteDataStore {
 				width INT NOT NULL,
 				height INT NOT NULL,
 				limit_view BOOL NOT NULL,
-				position INT NOT NULL
+				position INT NOT NULL,
+				reduce_view BOOL NOT NULL,
+				view_chunks INT NOT NULL,
+				shift_view BOOL NOT NULL,
+				view_offset INT NOT NULL
 			);",
 			[],
 		)?;
@@ -212,6 +216,11 @@ impl SQLiteDataStore {
 				width: row.get(5)?,
 				height: row.get(6)?,
 				limit: row.get(7)?,
+				// position: row.get(8)?,
+				reduce: row.get(9)?,
+				view_chunks: row.get(10)?,
+				shift: row.get(11)?,
+				view_offset: row.get(12)?,
 			})
 		})?;
 
@@ -228,14 +237,21 @@ impl SQLiteDataStore {
 	pub fn new_panel(
 		&self,
 		name: &str,
-		view_size: i32,
+		view_scroll: bool,
+		view_size: u32,
+		view_chunks: u32,
+		view_offset: u32,
+		timeserie: bool,
 		width: i32,
 		height: i32,
+		limit: bool,
+		reduce: bool,
+		shift: bool,
 		position: i32,
 	) -> rusqlite::Result<Panel> {
 		self.conn.execute(
-			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			params![name, true, view_size, true, width, height, false, position]
+			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position, reduce_view, view_chunks, shift_view, view_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			params![name, view_scroll, view_size, timeserie, width, height, limit, position, reduce, view_chunks, shift, view_offset]
 		)?;
 		let mut statement = self.conn.prepare("SELECT * FROM panels WHERE name = ?")?;
 		for panel in statement.query_map(params![name], |row| {
@@ -248,6 +264,11 @@ impl SQLiteDataStore {
 				width: row.get(5)?,
 				height: row.get(6)?,
 				limit: row.get(7)?,
+				// position: row.get(8)?,
+				reduce: row.get(9)?,
+				view_chunks: row.get(10)?,
+				shift: row.get(11)?,
+				view_offset: row.get(12)?,
 			})
 		})? {
 			if let Ok(p) = panel {
@@ -262,16 +283,20 @@ impl SQLiteDataStore {
 		id: i32,
 		name: &str,
 		view_scroll: bool,
-		view_size: i32,
+		view_size: u32,
+		view_chunks: u32,
+		view_offset: u32,
 		timeserie: bool,
 		width: i32,
 		height: i32,
 		limit: bool,
+		reduce: bool,
+		shift: bool,
 		position: i32,
 	) -> rusqlite::Result<usize> {
 		self.conn.execute(
-			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ?, limit_view = ?, position = ? WHERE id = ?",
-			params![name, view_scroll, view_size, timeserie, width, height, limit, position, id],
+			"UPDATE panels SET name = ?, view_scroll = ?, view_size = ?, timeserie = ?, width = ?, height = ?, limit_view = ?, position = ?, reduce_view = ?, view_chunks = ?, shift_view = ?, view_offset = ? WHERE id = ?",
+			params![name, view_scroll, view_size, timeserie, width, height, limit, position, reduce, view_chunks, shift, view_offset, id],
 		)
 	}
 

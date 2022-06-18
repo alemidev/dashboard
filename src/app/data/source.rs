@@ -4,15 +4,20 @@ use eframe::egui::plot::{Value, Values};
 use eframe::epaint::Color32;
 use std::sync::RwLock;
 
+#[derive(Debug)]
 pub struct Panel {
 	pub(crate) id: i32,
 	pub name: String,
 	pub view_scroll: bool,
-	pub view_size: i32,
+	pub view_size: u32,
+	pub view_chunks: u32,
+	pub view_offset: u32,
 	pub timeserie: bool,
 	pub(crate) width: i32,
 	pub(crate) height: i32,
 	pub limit: bool,
+	pub reduce: bool,
+	pub shift: bool,
 }
 
 impl Default for Panel {
@@ -22,14 +27,19 @@ impl Default for Panel {
 			name: "".to_string(),
 			view_scroll: true,
 			view_size: 300,
+			view_chunks: 5,
+			view_offset: 0,
 			timeserie: true,
 			width: 100,
 			height: 200,
 			limit: false,
+			reduce: false,
+			shift: false,
 		}
 	}
 }
 
+#[derive(Debug)]
 pub struct Source {
 	pub(crate) id: i32,
 	pub name: String,
@@ -64,19 +74,37 @@ impl Default for Source {
 	}
 }
 
+fn avg_value(values: &[Value]) -> Value {
+	let mut x = 0.0;
+	let mut y = 0.0;
+	for v in values {
+		x += v.x;
+		y += v.y;
+	}
+	return Value { x: x / values.len() as f64, y: y / values.len() as f64 };
+}
+
 impl Source {
 	pub fn valid(&self) -> bool {
 		let last_fetch = self.last_fetch.read().expect("LastFetch RwLock poisoned");
 		return (Utc::now() - *last_fetch).num_seconds() < self.interval as i64;
 	}
 
-	pub fn values(&self) -> Values {
-		Values::from_values(self.data.read().expect("Values RwLock poisoned").clone())
-	}
-
-	pub fn values_filter(&self, min_x: f64) -> Values {
+	// TODO optimize this with caching!
+	pub fn values(&self, min_x: Option<f64>, max_x: Option<f64>, chunk_size: Option<u32>) -> Values {
 		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
-		values.retain(|x| x.x > min_x);
+		if let Some(min_x) = min_x {
+			values.retain(|x| x.x > min_x);
+		}
+		if let Some(max_x) = max_x {
+			values.retain(|x| x.x < max_x);
+		}
+		if let Some(chunk_size) = chunk_size {
+			if chunk_size > 0 { // TODO make this nested if prettier
+				let iter = values.chunks(chunk_size as usize);
+				values = iter.map(|x| avg_value(x) ).collect();
+			}
+		}
 		Values::from_values(values)
 	}
 }

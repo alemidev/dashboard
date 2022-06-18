@@ -79,9 +79,16 @@ impl ApplicationState {
 			.expect("Storage Mutex poisoned")
 			.new_panel(
 				panel.name.as_str(),
+				false,
 				panel.view_size,
+				5,
+				0,
+				true,
 				panel.width,
 				panel.height,
+				false,
+				false,
+				false,
 				self.panels.read().expect("Panels RwLock poisoned").len() as i32, // todo can this be made more compact and without acquisition?
 			)?; // TODO make values customizable and useful
 		self.panels
