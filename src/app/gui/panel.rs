@@ -129,14 +129,14 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 	}
 
 	p.show(ui, |plot_ui| {
+		let _now = Utc::now().timestamp() as f64;
+		let _off = (panel.view_offset as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+		let _size = (panel.view_size as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+		let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
+		let max_x = if panel.shift { Some(_now - _off) } else { None };
+		let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
 		for source in sources {
 			if source.panel_id == panel.id {
-				let _now = Utc::now().timestamp() as f64;
-				let _off = (panel.view_offset as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
-				let _size = (panel.view_size as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
-				let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
-				let max_x = if panel.shift { Some(_now - _off) } else { None };
-				let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
 				// let chunks = None;
 				let line = Line::new(source.values(min_x, max_x, chunk_size)).name(source.name.as_str());
 				plot_ui.line(line.color(source.color));
