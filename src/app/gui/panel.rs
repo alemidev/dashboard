@@ -16,9 +16,20 @@ pub fn panel_edit_inline_ui(ui: &mut Ui, panel: &mut Panel) {
 		.show(ui);
 }
 
-pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
+pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, edit: bool) { // TODO make edit UI in separate func
 	ui.horizontal(|ui| {
-		ui.heading(panel.name.as_str());
+		if edit {
+			TextEdit::singleline(&mut panel.name)
+				.hint_text("name")
+				.desired_width(150.0)
+				.show(ui);
+			ui.separator();
+			ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
+			ui.separator();
+			ui.checkbox(&mut panel.timeserie, "timeserie");
+		} else {
+			ui.heading(panel.name.as_str());
+		}
 		ui.with_layout(Layout::right_to_left(), |ui| {
 			ui.horizontal(|ui| {
 				ui.toggle_value(&mut panel.view_scroll, "🔒");
@@ -52,12 +63,6 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
 					);
 				}
 				ui.toggle_value(&mut panel.reduce, "reduce");
-				if extra {
-					ui.separator();
-					ui.checkbox(&mut panel.timeserie, "timeserie");
-					ui.separator();
-					ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
-				}
 			});
 		});
 	});
@@ -138,17 +143,17 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 	for metric in metrics {
 		if metric.panel_id == panel.id {
 			let values = metric.values(min_x, max_x, chunk_size); 
-			if !panel.timeserie && panel.view_scroll && values.len() > 0 {
-				let l = values.len() - 1;
-				p = p.include_x(values[0].x)
-					.include_x(values[l].x)
-					.include_y(values[0].y)
-					.include_y(values[l].y);
-			}
+			// if !panel.timeserie && panel.view_scroll && values.len() > 0 {
+			// 	let l = values.len() - 1;
+			// 	p = p.include_x(values[0].x)
+			// 		.include_x(values[l].x)
+			// 		.include_y(values[0].y)
+			// 		.include_y(values[l].y);
+			// }
 			lines.push(
 				Line::new(Values::from_values(values))
-				.name(metric.name.as_str())
-				.color(metric.color)
+					.name(metric.name.as_str())
+					.color(metric.color)
 			);
 		}
 	}

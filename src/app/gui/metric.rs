@@ -38,7 +38,7 @@ pub fn metric_display_ui(ui: &mut Ui, metric: &Metric, _width: f32) {
 }
 
 pub fn metric_edit_ui(ui: &mut Ui, metric: &mut Metric, panels: Option<&Vec<Panel>>, width: f32) {
-	let text_width = width - 190.0;
+	let text_width = width - 195.0;
 	ui.horizontal(|ui| {
 		ui.color_edit_button_srgba(&mut metric.color);
 		TextEdit::singleline(&mut metric.name)
@@ -57,7 +57,7 @@ pub fn metric_edit_ui(ui: &mut Ui, metric: &mut Metric, panels: Option<&Vec<Pane
 		if let Some(panels) = panels {
 			ComboBox::from_id_source(format!("panel-selector-{}", metric.id))
 				.width(60.0)
-				.selected_text(format!("panel: {}", metric.panel_id))
+				.selected_text(format!("panel: {:02}", metric.panel_id))
 				.show_ui(ui, |ui| {
 					ui.selectable_value(&mut metric.panel_id, -1, "None");
 					for p in panels {
