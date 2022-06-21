@@ -1,7 +1,7 @@
 pub mod source;
 pub mod store;
 
-use self::source::{Panel, Source};
+use self::source::{Panel, Source, Metric};
 use self::store::SQLiteDataStore;
 use std::num::ParseFloatError;
 use std::path::PathBuf;
@@ -50,6 +50,7 @@ pub struct ApplicationState {
 	pub file_size: RwLock<u64>,
 	pub panels: RwLock<Vec<Panel>>,
 	pub sources: RwLock<Vec<Source>>,
+	pub metrics: RwLock<Vec<Metric>>,
 	pub storage: Mutex<SQLiteDataStore>,
 	pub diagnostics: RwLock<Vec<String>>,
 }
@@ -60,6 +61,7 @@ impl ApplicationState {
 
 		let panels = storage.load_panels()?;
 		let sources = storage.load_sources()?;
+		let metrics = storage.load_metrics()?;
 
 		return Ok(ApplicationState {
 			run: true,
@@ -67,6 +69,7 @@ impl ApplicationState {
 			file_path: path,
 			panels: RwLock::new(panels),
 			sources: RwLock::new(sources),
+			metrics: RwLock::new(metrics),
 			storage: Mutex::new(storage),
 			diagnostics: RwLock::new(Vec::new()),
 		});
@@ -104,20 +107,37 @@ impl ApplicationState {
 			.lock()
 			.expect("Storage Mutex poisoned")
 			.new_source(
-				source.panel_id,
 				source.name.as_str(),
 				source.enabled,
 				source.url.as_str(),
 				source.interval,
-				source.query_x.as_str(),
-				source.query_y.as_str(),
-				source.color,
 				self.sources.read().expect("Sources RwLock poisoned").len() as i32,
 			)?;
 		self.sources
 			.write()
 			.expect("Sources RwLock poisoned")
 			.push(verified_source);
+		return Ok(());
+	}
+
+	pub fn add_metric(&self, metric: &Metric, source: &Source) -> Result<(), FetchError> {
+		let verified_metric = self
+			.storage
+			.lock()
+			.expect("Storage Mutex poisoned")
+			.new_metric(
+				metric.name.as_str(),
+				source.id,
+				metric.query_x.as_str(),
+				metric.query_y.as_str(),
+				metric.panel_id,
+				metric.color,
+				self.metrics.read().expect("Sources RwLock poisoned").len() as i32, // TODO use source.metrics.len()
+			)?;
+		self.metrics
+			.write()
+			.expect("Sources RwLock poisoned")
+			.push(verified_metric);
 		return Ok(());
 	}
 }

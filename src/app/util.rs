@@ -46,6 +46,7 @@ pub fn unpack_color(c: u32) -> Color32 {
 	return Color32::from_rgba_unmultiplied(r, g, b, a);
 }
 
+#[allow(dead_code)]
 pub fn repack_color(c: Color32) -> u32 {
 	let mut out: u32 = 0;
 	let mut offset = 0;

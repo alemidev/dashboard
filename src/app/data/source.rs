@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use eframe::egui::plot::{Value, Values};
 use eframe::epaint::Color32;
 use std::sync::RwLock;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct Panel {
@@ -46,14 +47,7 @@ pub struct Source {
 	pub enabled: bool,
 	pub url: String,
 	pub interval: i32,
-	pub color: Color32,
 	pub(crate) last_fetch: RwLock<DateTime<Utc>>,
-	pub query_x: String,
-	// pub(crate) compiled_query_x: Arc<Mutex<jq_rs::JqProgram>>,
-	pub query_y: String,
-	// pub(crate) compiled_query_y: Arc<Mutex<jq_rs::JqProgram>>,
-	pub(crate) panel_id: i32,
-	pub(crate) data: RwLock<Vec<Value>>,
 }
 
 impl Default for Source {
@@ -64,12 +58,7 @@ impl Default for Source {
 			enabled: false,
 			url: "".to_string(),
 			interval: 60,
-			color: Color32::TRANSPARENT,
 			last_fetch: RwLock::new(Utc::now()),
-			query_x: "".to_string(),
-			query_y: "".to_string(),
-			panel_id: -1,
-			data: RwLock::new(Vec::new()),
 		}
 	}
 }
@@ -81,7 +70,10 @@ fn avg_value(values: &[Value]) -> Value {
 		x += v.x;
 		y += v.y;
 	}
-	return Value { x: x / values.len() as f64, y: y / values.len() as f64 };
+	return Value {
+		x: x / values.len() as f64,
+		y: y / values.len() as f64,
+	};
 }
 
 impl Source {
@@ -90,8 +82,64 @@ impl Source {
 		return (Utc::now() - *last_fetch).num_seconds() < self.interval as i64;
 	}
 
-	// TODO optimize this with caching!
-	pub fn values(&self, min_x: Option<f64>, max_x: Option<f64>, chunk_size: Option<u32>) -> Values {
+	pub fn fetch(&self) -> Result<serde_json::Value, FetchError> {
+		fetch(self.url.as_str())
+	}
+}
+
+pub fn fetch(url: &str) -> Result<serde_json::Value, FetchError> {
+	return Ok(ureq::get(url).call()?.into_json()?);
+}
+
+#[derive(Debug)]
+pub struct Metric {
+	pub(crate) id: i32,
+	pub name: String,
+	pub source_id: i32,
+	pub color: Color32,
+	pub query_x: String,
+	pub query_y: String,
+	pub(crate) panel_id: i32,
+	pub(crate) data: RwLock<Vec<Value>>,
+}
+
+impl Default for Metric {
+	fn default() -> Self {
+		Metric {
+			id: -1,
+			name: "".to_string(),
+			source_id: -1,
+			color: Color32::TRANSPARENT,
+			query_x: "".to_string(),
+			query_y: "".to_string(),
+			panel_id: -1,
+			data: RwLock::new(Vec::new()),
+		}
+	}
+}
+
+impl Metric {
+	pub fn extract(&self, value: &serde_json::Value) -> Result<Value, FetchError> {
+		let x: f64;
+		if self.query_x.len() > 0 {
+			x = jql::walker(value, self.query_x.as_str())?
+				.as_f64()
+				.ok_or(FetchError::JQLError("X query is null".to_string()))?; // TODO what if it's given to us as a string?
+		} else {
+			x = Utc::now().timestamp() as f64;
+		}
+		let y = jql::walker(value, self.query_y.as_str())?
+			.as_f64()
+			.ok_or(FetchError::JQLError("Y query is null".to_string()))?;
+		Ok(Value { x, y })
+	}
+
+	pub fn values(
+		&self,
+		min_x: Option<f64>,
+		max_x: Option<f64>,
+		chunk_size: Option<u32>,
+	) -> Values {
 		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
 		if let Some(min_x) = min_x {
 			values.retain(|x| x.x > min_x);
@@ -100,27 +148,12 @@ impl Source {
 			values.retain(|x| x.x < max_x);
 		}
 		if let Some(chunk_size) = chunk_size {
-			if chunk_size > 0 { // TODO make this nested if prettier
+			if chunk_size > 0 {
+				// TODO make this nested if prettier
 				let iter = values.chunks(chunk_size as usize);
-				values = iter.map(|x| avg_value(x) ).collect();
+				values = iter.map(|x| avg_value(x)).collect();
 			}
 		}
 		Values::from_values(values)
 	}
-}
-
-pub fn fetch(url: &str, query_x: &str, query_y: &str) -> Result<Value, FetchError> {
-	let res = ureq::get(url).call()?.into_json()?;
-	let x: f64;
-	if query_x.len() > 0 {
-		x = jql::walker(&res, query_x)?
-			.as_f64()
-			.ok_or(FetchError::JQLError("X query is null".to_string()))?; // TODO what if it's given to us as a string?
-	} else {
-		x = Utc::now().timestamp() as f64;
-	}
-	let y = jql::walker(&res, query_y)?
-		.as_f64()
-		.ok_or(FetchError::JQLError("Y query is null".to_string()))?;
-	return Ok(Value { x, y });
 }

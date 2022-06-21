@@ -5,7 +5,7 @@ use eframe::{egui::{
 }, emath::Vec2};
 
 use crate::app::{
-	data::source::{Panel, Source},
+	data::source::{Panel, Metric},
 	util::timestamp_to_str,
 };
 
@@ -24,30 +24,30 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
 				ui.toggle_value(&mut panel.view_scroll, "🔒");
 				ui.separator();
 				if panel.limit {
-					ui.label("min"); // TODO makes no sense if it's not a timeserie
 					ui.add(
 						DragValue::new(&mut panel.view_size)
 							.speed(10)
+							.suffix(" min")
 							.clamp_range(0..=2147483647i32),
 					);
 				}
 				ui.toggle_value(&mut panel.limit, "limit");
 				ui.separator();
 				if panel.shift {
-					ui.label("min");
 					ui.add(
 						DragValue::new(&mut panel.view_offset)
 							.speed(10)
+							.suffix(" min")
 							.clamp_range(0..=2147483647i32),
 					);
 				}
 				ui.toggle_value(&mut panel.shift, "offset");
 				ui.separator();
 				if panel.reduce {
-					ui.label("x");
 					ui.add(
 						DragValue::new(&mut panel.view_chunks)
 							.speed(1)
+							.prefix("x")
 							.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
 					);
 				}
@@ -63,7 +63,7 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, extra: bool) {
 	});
 }
 
-pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
+pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 	let mut p = Plot::new(format!("plot-{}", panel.name))
 		.height(panel.height as f32)
 		.allow_scroll(false)
@@ -135,11 +135,13 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, sources: &Vec<Source>) {
 		let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
 		let max_x = if panel.shift { Some(_now - _off) } else { None };
 		let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
-		for source in sources {
-			if source.panel_id == panel.id {
+		for metric in metrics {
+			if metric.panel_id == panel.id {
 				// let chunks = None;
-				let line = Line::new(source.values(min_x, max_x, chunk_size)).name(source.name.as_str());
-				plot_ui.line(line.color(source.color));
+				let line = Line::new(metric.values(min_x, max_x, chunk_size))
+					.name(metric.name.as_str())
+					.color(metric.color);
+				plot_ui.line(line);
 			}
 		}
 	});
