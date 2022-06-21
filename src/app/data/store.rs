@@ -8,6 +8,8 @@ use eframe::egui::{plot::Value, Color32};
 use rusqlite::{params, Connection};
 use std::sync::RwLock;
 
+use super::source::Metric;
+
 pub trait DataStorage {
 	fn add_panel(&self, name: &str);
 }
@@ -46,19 +48,38 @@ impl SQLiteDataStore {
 				enabled BOOL NOT NULL,
 				url TEXT NOT NULL,
 				interval INT NOT NULL,
-				query_x TEXT NOT NULL,
-				query_y TEXT NOT NULL,
-				panel_id INT NOT NULL,
-				color INT NULL,
 				position INT NOT NULL
 			);",
 			[],
 		)?;
 
 		conn.execute(
+			"CREATE TABLE IF NOT EXISTS metrics (
+				id INTEGER PRIMARY KEY,
+				name TEXT NOT NULL,
+				source_id INT NOT NULL,
+				query_x TEXT NOT NULL,
+				query_y TEXT NOT NULL,
+				panel_id INT NOT NULL,
+				color INT NOT NULL,
+				position INT NOT NULL
+			);",
+			[],
+		)?;
+
+// BEGIN TRANSACTION;
+// CREATE TEMPORARY TABLE t1_backup(a,b);
+// INSERT INTO t1_backup SELECT a,b FROM t1;
+// DROP TABLE t1;
+// CREATE TABLE t1(a,b);
+// INSERT INTO t1 SELECT a,b FROM t1_backup;
+// DROP TABLE t1_backup;
+// COMMIT;
+
+		conn.execute(
 			"CREATE TABLE IF NOT EXISTS points (
 				id INTEGER PRIMARY KEY,
-				source_id INT NOT NULL,
+				metric_id INT NOT NULL,
 				x FLOAT NOT NULL,
 				y FLOAT NOT NULL
 			);",
@@ -68,12 +89,12 @@ impl SQLiteDataStore {
 		Ok(SQLiteDataStore { conn })
 	}
 
-	pub fn load_values(&self, source_id: i32) -> rusqlite::Result<Vec<Value>> {
+	pub fn load_values(&self, metric_id: i32) -> rusqlite::Result<Vec<Value>> {
 		let mut values: Vec<Value> = Vec::new();
 		let mut statement = self
 			.conn
-			.prepare("SELECT x, y FROM points WHERE source_id = ?")?;
-		let values_iter = statement.query_map(params![source_id], |row| {
+			.prepare("SELECT x, y FROM points WHERE metric_id = ?")?;
+		let values_iter = statement.query_map(params![metric_id], |row| {
 			Ok(Value {
 				x: row.get(0)?,
 				y: row.get(1)?,
@@ -89,10 +110,10 @@ impl SQLiteDataStore {
 		Ok(values)
 	}
 
-	pub fn put_value(&self, source_id: i32, v: Value) -> rusqlite::Result<usize> {
+	pub fn put_value(&self, metric_id: i32, v: Value) -> rusqlite::Result<usize> {
 		self.conn.execute(
-			"INSERT INTO points(source_id, x, y) VALUES (?, ?, ?)",
-			params![source_id, v.x, v.y],
+			"INSERT INTO points(metric_id, x, y) VALUES (?, ?, ?)",
+			params![metric_id, v.x, v.y],
 		)
 	}
 
@@ -107,17 +128,11 @@ impl SQLiteDataStore {
 				url: row.get(3)?,
 				interval: row.get(4)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
-				query_x: row.get(5)?,
-				query_y: row.get(6)?,
-				panel_id: row.get(7)?,
-				color: unpack_color(row.get(8).unwrap_or(0)),
-				data: RwLock::new(Vec::new()),
 			})
 		})?;
 
 		for source in sources_iter {
-			if let Ok(mut s) = source {
-				s.data = RwLock::new(self.load_values(s.id)?);
+			if let Ok(s) = source {
 				sources.push(s);
 			}
 		}
@@ -128,41 +143,28 @@ impl SQLiteDataStore {
 	// jank! TODO make it not jank!
 	pub fn new_source(
 		&self,
-		panel_id: i32,
 		name: &str,
 		enabled: bool,
 		url: &str,
 		interval: i32,
-		query_x: &str,
-		query_y: &str,
-		color: Color32,
 		position: i32,
 	) -> rusqlite::Result<Source> {
-		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
-			None
-		} else {
-			Some(repack_color(color))
-		};
 		self.conn.execute(
-			"INSERT INTO sources(name, enabled, url, interval, query_x, query_y, panel_id, color, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			params![name, enabled, url, interval, query_x, query_y, panel_id, color_u32, position],
+			"INSERT INTO sources(name, enabled, url, interval, position) VALUES (?, ?, ?, ?, ?)",
+			params![name, enabled, url, interval, position],
 		)?;
 		let mut statement = self
 			.conn
-			.prepare("SELECT * FROM sources WHERE name = ? AND panel_id = ?")?;
-		for panel in statement.query_map(params![name, panel_id], |row| {
+			.prepare("SELECT * FROM sources WHERE name = ? AND url = ? ORDER BY id DESC")?;
+		for panel in statement.query_map(params![name, url], |row| {
 			Ok(Source {
 				id: row.get(0)?,
 				name: row.get(1)?,
 				enabled: row.get(2)?,
 				url: row.get(3)?,
 				interval: row.get(4)?,
+				// position: row.get(5)?,
 				last_fetch: RwLock::new(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0)),
-				query_x: row.get(5)?,
-				query_y: row.get(6)?,
-				panel_id: row.get(7)?,
-				color: unpack_color(row.get(8).unwrap_or(0)),
-				data: RwLock::new(Vec::new()),
 			})
 		})? {
 			if let Ok(p) = panel {
@@ -175,30 +177,108 @@ impl SQLiteDataStore {
 
 	pub fn update_source(
 		&self,
-		source_id: i32,
-		panel_id: i32,
+		id: i32,
 		name: &str,
 		enabled: bool,
 		url: &str,
 		interval: i32,
-		query_x: &str,
-		query_y: &str,
-		color: Color32,
 		position: i32,
 	) -> rusqlite::Result<usize> {
-		let color_u32: Option<u32> = if color == Color32::TRANSPARENT {
-			None
-		} else {
-			Some(repack_color(color))
-		};
 		self.conn.execute(
-			"UPDATE sources SET name = ?, enabled = ?, url = ?, interval = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, position = ? WHERE id = ?",
-			params![name, enabled, url, interval, query_x, query_y, panel_id, color_u32, position, source_id],
+			"UPDATE sources SET name = ?, enabled = ?, url = ?, interval = ?, position = ? WHERE id = ?",
+			params![name, enabled, url, interval, position, id],
 		)
 	}
 
 	// pub fn delete_source(&self, id:i32) -> rusqlite::Result<usize> {
 	// 	self.conn.execute("DELETE FROM sources WHERE id = ?", params![id])
+	// }
+
+	pub fn load_metrics(&self) -> rusqlite::Result<Vec<Metric>> {
+		let mut metrics: Vec<Metric> = Vec::new();
+		let mut statement = self.conn.prepare("SELECT * FROM metrics ORDER BY position")?;
+		let metrics_iter = statement.query_map([], |row| {
+			Ok(Metric {
+				id: row.get(0)?,
+				name: row.get(1)?,
+				source_id: row.get(2)?,
+				query_x: row.get(3)?,
+				query_y: row.get(4)?,
+				panel_id: row.get(5)?,
+				color: unpack_color(row.get(6).unwrap_or(0)),
+				// position: row.get(7)?,
+				data: RwLock::new(Vec::new()),
+			})
+		})?;
+
+		for metric in metrics_iter {
+			if let Ok(m) = metric {
+				*m.data.write().expect("Points RwLock poisoned") = self.load_values(m.id)?;
+				metrics.push(m);
+			}
+		}
+
+		Ok(metrics)
+	}
+
+	// jank! TODO make it not jank!
+	pub fn new_metric(
+		&self,
+		name: &str,
+		source_id: i32,
+		query_x: &str,
+		query_y: &str,
+		panel_id: i32,
+		color: Color32,
+		position: i32,
+	) -> rusqlite::Result<Metric> {
+		self.conn.execute(
+			"INSERT INTO metrics(name, source_id, query_x, query_y, panel_id, color, position) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			params![name, source_id, query_x, query_y, panel_id, repack_color(color), position],
+		)?;
+		let mut statement = self
+			.conn
+			.prepare("SELECT * FROM metrics WHERE source_id = ? AND panel_id = ? AND name = ? ORDER BY id DESC")?;
+		for metric in statement.query_map(params![source_id, panel_id, name], |row| {
+			Ok(Metric {
+				id: row.get(0)?,
+				name: row.get(1)?,
+				source_id: row.get(2)?,
+				query_x: row.get(3)?,
+				query_y: row.get(4)?,
+				panel_id: row.get(5)?,
+				color: unpack_color(row.get(6).unwrap_or(0)),
+				// position: row.get(7)?,
+				data: RwLock::new(Vec::new()),
+			})
+		})? {
+			if let Ok(m) = metric {
+				return Ok(m);
+			}
+		}
+
+		Err(rusqlite::Error::QueryReturnedNoRows)
+	}
+
+	pub fn update_metric(
+		&self,
+		id: i32,
+		name: &str,
+		source_id: i32,
+		query_x: &str,
+		query_y: &str,
+		panel_id: i32,
+		color: Color32,
+		position: i32,
+	) -> rusqlite::Result<usize> {
+		self.conn.execute(
+			"UPDATE metrics SET name = ?, query_x = ?, query_y = ?, panel_id = ?, color = ?, position = ? WHERE id = ? AND source_id = ?",
+			params![name, query_x, query_y, panel_id, repack_color(color), position, id, source_id],
+		)
+	}
+
+	// pub fn delete_metric(&self, id:i32) -> rusqlite::Result<usize> {
+	// 	self.conn.execute("DELETE FROM metrics WHERE id = ?", params![id])
 	// }
 
 	pub fn load_panels(&self) -> rusqlite::Result<Vec<Panel>> {

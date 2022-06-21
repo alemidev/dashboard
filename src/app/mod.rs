@@ -11,18 +11,21 @@ use eframe::emath::Align;
 use std::sync::Arc;
 use tracing::error;
 
-use self::data::source::{Panel, Source};
+use self::data::source::{Metric, Panel, Source};
 use self::data::ApplicationState;
+use self::gui::metric::metric_edit_ui;
 use self::gui::panel::{panel_body_ui, panel_edit_inline_ui, panel_title_ui};
-use self::gui::source::source_edit_ui;
+use self::gui::source::{source_display_ui, source_edit_ui};
 use self::util::human_size;
 use self::worker::native_save;
 
 pub struct App {
 	data: Arc<ApplicationState>,
+	input_metric: Metric,
 	input_source: Source,
 	input_panel: Panel,
 	edit: bool,
+	sources: bool,
 	padding: bool,
 }
 
@@ -30,9 +33,11 @@ impl App {
 	pub fn new(_cc: &eframe::CreationContext, data: Arc<ApplicationState>) -> Self {
 		Self {
 			data,
+			input_metric: Metric::default(),
 			input_panel: Panel::default(),
 			input_source: Source::default(),
 			edit: false,
+			sources: true,
 			padding: false,
 		}
 	}
@@ -44,6 +49,8 @@ impl eframe::App for App {
 			ui.horizontal(|ui| {
 				global_dark_light_mode_switch(ui);
 				ui.heading("dashboard");
+				ui.separator();
+				ui.checkbox(&mut self.sources, "sources");
 				ui.separator();
 				ui.checkbox(&mut self.edit, "edit");
 				if self.edit {
@@ -118,48 +125,98 @@ impl eframe::App for App {
 				});
 			});
 		});
-		if self.edit {
+		if self.sources {
 			let mut to_swap: Option<usize> = None;
 			// let mut to_delete: Option<usize> = None;
 			SidePanel::left("sources-bar")
 				.width_range(280.0..=800.0)
-				.default_width(500.0)
+				.default_width(350.0)
 				.show(ctx, |ui| {
 					let panels = self.data.panels.read().expect("Panels RwLock poisoned");
-					ScrollArea::vertical().show(ui, |ui| {
-						let panel_width = ui.available_width();
+					let panel_width = ui.available_width();
+					ScrollArea::both().max_width(panel_width).show(ui, |ui| {
+						// TODO only vertical!
 						{
-							let mut sources = self.data.sources.write().expect("Sources RwLock poisoned");
+							let mut sources =
+								self.data.sources.write().expect("Sources RwLock poisoned");
 							let sources_count = sources.len();
+							ui.heading("Sources");
+							ui.separator();
 							for (index, source) in sources.iter_mut().enumerate() {
 								ui.horizontal(|ui| {
+									if self.edit {
+										ui.vertical(|ui| {
+											ui.add_space(10.0);
+											if ui.small_button("+").clicked() {
+												if index > 0 {
+													to_swap = Some(index); // TODO kinda jank but is there a better way?
+												}
+											}
+											if ui.small_button("−").clicked() {
+												if index < sources_count - 1 {
+													to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
+												}
+											}
+										});
+									}
 									ui.vertical(|ui| {
-										ui.add_space(10.0);
-										if ui.small_button("+").clicked() {
-											if index > 0 {
-												to_swap = Some(index); // TODO kinda jank but is there a better way?
-											}
-										}
-										if ui.small_button("−").clicked() {
-											if index < sources_count - 1 {
-												to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
-											}
+										let remaining_width = ui.available_width();
+										if self.edit {
+											ui.group(|ui| {
+												source_edit_ui(
+													ui,
+													source,
+													Some(&mut *self.data.metrics.write().expect("Metrics RwLock poisoned")),
+													&panels,
+													remaining_width,
+												);
+												ui.horizontal(|ui| {
+													metric_edit_ui(
+														ui,
+														&mut self.input_metric,
+														None,
+														remaining_width - 10.0,
+													);
+													ui.add_space(5.0);
+													if ui.button(" × ").clicked() {
+														self.input_metric = Metric::default();
+													}
+													ui.separator();
+													if ui.button(" + ").clicked() {
+														if let Err(e) = self
+															.data
+															.add_metric(&self.input_metric, source)
+														{
+															error!(target: "ui", "Error adding metric : {:?}", e);
+														}
+													}
+												})
+											});
+										} else {
+											let metrics =
+												self.data.metrics.read().expect("Metrics RwLock poisoned");
+											source_display_ui(
+												ui,
+												source,
+												&metrics,
+												remaining_width,
+											);
+											ui.separator();
 										}
 									});
-									let remaining_width = ui.available_width();
-									source_edit_ui(ui, source, &panels, remaining_width);
 								});
 							}
 						}
-						ui.add_space(20.0);
-						ui.separator();
-						ui.horizontal(|ui| {
-							ui.heading("new source");
+						if self.edit {
+							ui.add_space(20.0);
+							ui.separator();
+							ui.horizontal(|ui| {
+								ui.heading("new source");
 								ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 									ui.horizontal(|ui| {
 										if ui.button("add").clicked() {
 											if let Err(e) = self.data.add_source(&self.input_source) {
-												error!(target: "ui", "Error adding souce : {:?}", e);
+												error!(target: "ui", "Error adding source : {:?}", e);
 											} else {
 												self.input_source.id += 1;
 											}
@@ -167,10 +224,17 @@ impl eframe::App for App {
 										ui.toggle_value(&mut self.padding, "#");
 									});
 								});
-						});
-						source_edit_ui(ui, &mut self.input_source, &panels, panel_width);
-						if self.padding {
-							ui.add_space(300.0);
+							});
+							source_edit_ui(
+								ui,
+								&mut self.input_source,
+								None,
+								&panels,
+								panel_width,
+							);
+							if self.padding {
+								ui.add_space(300.0);
+							}
 						}
 					});
 				});
@@ -191,7 +255,7 @@ impl eframe::App for App {
 			ScrollArea::vertical().show(ui, |ui| {
 				let mut panels = self.data.panels.write().expect("Panels RwLock poisoned"); // TODO only lock as write when editing
 				let panels_count = panels.len();
-				let sources = self.data.sources.read().expect("Sources RwLock poisoned"); // TODO only lock as write when editing
+				let metrics = self.data.metrics.read().expect("Metrics RwLock poisoned"); // TODO only lock as write when editing
 				for (index, panel) in panels.iter_mut().enumerate() {
 					if index > 0 {
 						ui.separator();
@@ -220,19 +284,31 @@ impl eframe::App for App {
 						}
 						panel_title_ui(ui, panel, self.edit);
 					})
-					.body(|ui| panel_body_ui(ui, panel, &sources));
+					.body(|ui| panel_body_ui(ui, panel, &metrics));
 				}
 			});
 		});
 		if let Some(i) = to_delete {
 			// TODO can this be done in background? idk
 			let mut panels = self.data.panels.write().expect("Panels RwLock poisoned");
-			if let Err(e) = self.data.storage.lock().expect("Storage Mutex poisoned").delete_panel(panels[i].id) {
+			if let Err(e) = self
+				.data
+				.storage
+				.lock()
+				.expect("Storage Mutex poisoned")
+				.delete_panel(panels[i].id)
+			{
 				error!(target: "ui", "Could not delete panel : {:?}", e);
 			} else {
-				for source in self.data.sources.write().expect("Sources RwLock poisoned").iter_mut() {
-					if source.panel_id == panels[i].id {
-						source.panel_id = -1;
+				for metric in self
+					.data
+					.metrics
+					.write()
+					.expect("Sources RwLock poisoned")
+					.iter_mut()
+				{
+					if metric.panel_id == panels[i].id {
+						metric.panel_id = -1;
 					}
 				}
 				panels.remove(i);
