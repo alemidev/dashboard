@@ -23,7 +23,9 @@ pub fn metric_display_ui(ui: &mut Ui, metric: &Metric, _width: f32) {
 		ui.label(&metric.name);
 		ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 			ui.horizontal(|ui| {
-				ui.label(format!("panel: {}", metric.panel_id));
+				if metric.panel_id >= 0 {
+					ui.label(format!("panel: {}", metric.panel_id));
+				}
 				if metric.query_y.len() > 0 {
 					ui.label(format!("y: {}", metric.query_y));
 				}

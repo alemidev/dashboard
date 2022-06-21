@@ -130,7 +130,7 @@ impl eframe::App for App {
 			// let mut to_delete: Option<usize> = None;
 			SidePanel::left("sources-bar")
 				.width_range(280.0..=800.0)
-				.default_width(350.0)
+				.default_width(330.0)
 				.show(ctx, |ui| {
 					let panels = self.data.panels.read().expect("Panels RwLock poisoned");
 					let panel_width = ui.available_width();
@@ -208,7 +208,6 @@ impl eframe::App for App {
 							}
 						}
 						if self.edit {
-							ui.add_space(20.0);
 							ui.separator();
 							ui.horizontal(|ui| {
 								ui.heading("new source");
@@ -232,6 +231,7 @@ impl eframe::App for App {
 								&panels,
 								panel_width,
 							);
+							ui.add_space(5.0);
 							if self.padding {
 								ui.add_space(300.0);
 							}
