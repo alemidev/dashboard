@@ -1,9 +1,8 @@
 use super::FetchError;
 use chrono::{DateTime, Utc};
-use eframe::egui::plot::{Value, Values};
+use eframe::egui::plot::Value;
 use eframe::epaint::Color32;
 use std::sync::RwLock;
-use tracing::info;
 
 #[derive(Debug)]
 pub struct Panel {
@@ -82,9 +81,9 @@ impl Source {
 		return (Utc::now() - *last_fetch).num_seconds() < self.interval as i64;
 	}
 
-	pub fn fetch(&self) -> Result<serde_json::Value, FetchError> {
-		fetch(self.url.as_str())
-	}
+	// pub fn fetch(&self) -> Result<serde_json::Value, FetchError> {
+	// 	fetch(self.url.as_str())
+	// }
 }
 
 pub fn fetch(url: &str) -> Result<serde_json::Value, FetchError> {
@@ -139,7 +138,7 @@ impl Metric {
 		min_x: Option<f64>,
 		max_x: Option<f64>,
 		chunk_size: Option<u32>,
-	) -> Values {
+	) -> Vec<Value> {
 		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
 		if let Some(min_x) = min_x {
 			values.retain(|x| x.x > min_x);
@@ -154,6 +153,6 @@ impl Metric {
 				values = iter.map(|x| avg_value(x)).collect();
 			}
 		}
-		Values::from_values(values)
+		values
 	}
 }

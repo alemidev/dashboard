@@ -1,6 +1,6 @@
 use chrono::{Local, Utc};
 use eframe::{egui::{
-	plot::{Corner, GridMark, Legend, Line, Plot},
+	plot::{Corner, GridMark, Legend, Line, Plot, Values},
 	DragValue, Layout, Ui, Slider, TextEdit,
 }, emath::Vec2};
 
@@ -73,17 +73,17 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 		p = p.set_margin_fraction(Vec2 { x: 0.0, y: 0.1 });
 	}
 
-	if panel.view_scroll {
-		let _now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
-		p = p.include_x(_now);
-		if panel.limit {
-			p = p
-				.include_x(_now + (panel.view_size as f64 * 3.0))
-				.include_x(_now - (panel.view_size as f64 * 60.0)); // ??? TODO
-		}
-	}
 
 	if panel.timeserie {
+		if panel.view_scroll {
+			let _now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
+			p = p.include_x(_now);
+			if panel.limit {
+				p = p
+					.include_x(_now + (panel.view_size as f64 * 3.0))
+					.include_x(_now - (panel.view_size as f64 * 60.0)); // ??? TODO
+			}
+		}
 		p = p
 			.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false))
 			.label_formatter(|name, value| {
@@ -128,21 +128,34 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 			});
 	}
 
-	p.show(ui, |plot_ui| {
-		let _now = Utc::now().timestamp() as f64;
-		let _off = (panel.view_offset as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
-		let _size = (panel.view_size as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
-		let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
-		let max_x = if panel.shift { Some(_now - _off) } else { None };
-		let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
-		for metric in metrics {
-			if metric.panel_id == panel.id {
-				// let chunks = None;
-				let line = Line::new(metric.values(min_x, max_x, chunk_size))
-					.name(metric.name.as_str())
-					.color(metric.color);
-				plot_ui.line(line);
+	let mut lines : Vec<Line> = Vec::new();
+	let _now = Utc::now().timestamp() as f64;
+	let _off = (panel.view_offset as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+	let _size = (panel.view_size as f64) * 60.0; // TODO multiplying x60 makes sense only for timeseries
+	let min_x = if panel.limit { Some(_now - _size - _off) } else { None };
+	let max_x = if panel.shift { Some(_now - _off) } else { None };
+	let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
+	for metric in metrics {
+		if metric.panel_id == panel.id {
+			let values = metric.values(min_x, max_x, chunk_size); 
+			if !panel.timeserie && panel.view_scroll && values.len() > 0 {
+				let l = values.len() - 1;
+				p = p.include_x(values[0].x)
+					.include_x(values[l].x)
+					.include_y(values[0].y)
+					.include_y(values[l].y);
 			}
+			lines.push(
+				Line::new(Values::from_values(values))
+				.name(metric.name.as_str())
+				.color(metric.color)
+			);
+		}
+	}
+
+	p.show(ui, |plot_ui| {
+		for line in lines {
+			plot_ui.line(line);
 		}
 	});
 }
