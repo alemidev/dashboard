@@ -1,13 +1,86 @@
+use std::sync::Arc;
+
 use chrono::{Local, Utc};
 use eframe::{egui::{
 	plot::{Corner, GridMark, Legend, Line, Plot, Values},
-	DragValue, Layout, Ui, Slider, TextEdit,
+	DragValue, Layout, Ui, Slider, TextEdit, ScrollArea, collapsing_header::CollapsingState, Context,
 }, emath::Vec2};
+use tracing::error;
 
 use crate::app::{
 	data::source::{Panel, Metric},
-	util::timestamp_to_str,
+	util::timestamp_to_str, App,
 };
+
+pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
+	let mut to_swap: Option<usize> = None;
+	let mut to_delete: Option<usize> = None;
+	ScrollArea::vertical().show(ui, |ui| {
+		let mut panels = app.data.panels.write().expect("Panels RwLock poisoned"); // TODO only lock as write when editing
+		let panels_count = panels.len();
+		let metrics = app.data.metrics.read().expect("Metrics RwLock poisoned"); // TODO only lock as write when editing
+		for (index, panel) in panels.iter_mut().enumerate() {
+			if index > 0 {
+				ui.separator();
+			}
+			CollapsingState::load_with_default_open(
+				ctx,
+				ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
+				true,
+			)
+			.show_header(ui, |ui| {
+				if app.edit {
+					if ui.small_button(" + ").clicked() {
+						if index > 0 {
+							to_swap = Some(index); // TODO kinda jank but is there a better way?
+						}
+					}
+					if ui.small_button(" − ").clicked() {
+						if index < panels_count - 1 {
+							to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
+						}
+					}
+					if ui.small_button(" × ").clicked() {
+						to_delete = Some(index); // TODO kinda jank but is there a better way?
+					}
+					ui.separator();
+				}
+				panel_title_ui(ui, panel, app.edit);
+			})
+			.body(|ui| panel_body_ui(ui, panel, &metrics));
+		}
+	});
+	if let Some(i) = to_delete {
+		// TODO can this be done in background? idk
+		let mut panels = app.data.panels.write().expect("Panels RwLock poisoned");
+		if let Err(e) = app
+			.data
+			.storage
+			.lock()
+			.expect("Storage Mutex poisoned")
+			.delete_panel(panels[i].id)
+		{
+			error!(target: "ui", "Could not delete panel : {:?}", e);
+		} else {
+			for metric in app
+				.data
+				.metrics
+				.write()
+				.expect("Sources RwLock poisoned")
+				.iter_mut()
+			{
+				if metric.panel_id == panels[i].id {
+					metric.panel_id = -1;
+				}
+			}
+			panels.remove(i);
+		}
+	} else if let Some(i) = to_swap {
+		// TODO can this be done in background? idk
+		let mut panels = app.data.panels.write().expect("Panels RwLock poisoned");
+		panels.swap(i - 1, i);
+	}
+}
 
 pub fn panel_edit_inline_ui(ui: &mut Ui, panel: &mut Panel) {
 	TextEdit::singleline(&mut panel.name)
@@ -61,6 +134,7 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, edit: bool) { // TODO make
 							.prefix("x")
 							.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
 					);
+					ui.checkbox(&mut panel.average, "avg");
 				}
 				ui.toggle_value(&mut panel.reduce, "reduce");
 			});
