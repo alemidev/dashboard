@@ -117,6 +117,13 @@ impl SQLiteDataStore {
 		)
 	}
 
+	pub fn delete_values(&self, metric_id: i32) -> rusqlite::Result<usize> {
+		self.conn.execute(
+			"DELETE FROM points WHERE metric_id = ?",
+			params![metric_id]
+		)
+	}
+
 	pub fn load_sources(&self) -> rusqlite::Result<Vec<Source>> {
 		let mut sources: Vec<Source> = Vec::new();
 		let mut statement = self.conn.prepare("SELECT * FROM sources ORDER BY position")?;
@@ -190,9 +197,9 @@ impl SQLiteDataStore {
 		)
 	}
 
-	// pub fn delete_source(&self, id:i32) -> rusqlite::Result<usize> {
-	// 	self.conn.execute("DELETE FROM sources WHERE id = ?", params![id])
-	// }
+	pub fn delete_source(&self, id:i32) -> rusqlite::Result<usize> {
+		self.conn.execute("DELETE FROM sources WHERE id = ?", params![id])
+	}
 
 	pub fn load_metrics(&self) -> rusqlite::Result<Vec<Metric>> {
 		let mut metrics: Vec<Metric> = Vec::new();
@@ -277,9 +284,9 @@ impl SQLiteDataStore {
 		)
 	}
 
-	// pub fn delete_metric(&self, id:i32) -> rusqlite::Result<usize> {
-	// 	self.conn.execute("DELETE FROM metrics WHERE id = ?", params![id])
-	// }
+	pub fn delete_metric(&self, id:i32) -> rusqlite::Result<usize> {
+		self.conn.execute("DELETE FROM metrics WHERE id = ?", params![id])
+	}
 
 	pub fn load_panels(&self) -> rusqlite::Result<Vec<Panel>> {
 		let mut panels: Vec<Panel> = Vec::new();
