@@ -1,11 +1,11 @@
-use eframe::{egui::{Ui, TextEdit, DragValue, Checkbox, ScrollArea, Context, Layout}, emath::Align};
+use eframe::{egui::{Ui, TextEdit, DragValue, Checkbox, ScrollArea, Layout}, emath::Align};
 use tracing::error;
 
 use crate::app::{data::source::{Source, Metric}, App};
 
 use super::metric::{metric_edit_ui, metric_display_ui};
 
-pub fn source_panel(app: &mut App, ctx: &Context, ui: &mut Ui) {
+pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	let mut to_swap: Option<usize> = None;
 	// let mut to_delete: Option<usize> = None;
 	let panels = app.data.panels.read().expect("Panels RwLock poisoned");
