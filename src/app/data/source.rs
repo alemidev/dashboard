@@ -4,7 +4,7 @@ use eframe::egui::plot::Value;
 use eframe::epaint::Color32;
 use std::sync::RwLock;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Panel {
 	pub(crate) id: i32,
 	pub name: String,
@@ -18,6 +18,7 @@ pub struct Panel {
 	pub limit: bool,
 	pub reduce: bool,
 	pub shift: bool,
+	pub average: bool,
 }
 
 impl Default for Panel {
@@ -35,6 +36,7 @@ impl Default for Panel {
 			limit: false,
 			reduce: false,
 			shift: false,
+			average: false,
 		}
 	}
 }
@@ -138,6 +140,7 @@ impl Metric {
 		min_x: Option<f64>,
 		max_x: Option<f64>,
 		chunk_size: Option<u32>,
+		average: bool,
 	) -> Vec<Value> {
 		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
 		if let Some(min_x) = min_x {
@@ -150,7 +153,7 @@ impl Metric {
 			if chunk_size > 0 {
 				// TODO make this nested if prettier
 				let iter = values.chunks(chunk_size as usize);
-				values = iter.map(|x| avg_value(x)).collect();
+				values = iter.map(|x| if average { avg_value(x) } else { if x.len() > 0 { x[x.len()-1] } else { Value {x: 0.0, y:0.0 }} }).collect();
 			}
 		}
 		values
