@@ -6,18 +6,32 @@ use crate::app::{
 	worker::{BackgroundWorker, NativeBackgroundWorker},
 	App,
 };
+use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::metadata::LevelFilter;
 use tracing_subscriber::prelude::*;
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ! {
-	use tracing::metadata::LevelFilter;
-
 	let native_options = eframe::NativeOptions::default();
 
-	let mut store_path = dirs::data_dir().unwrap_or(std::path::PathBuf::from(".")); // TODO get cwd more consistently?
+	let args: Vec<String> = std::env::args().collect();
+
+	// Set default file location
+	let mut store_path = dirs::data_dir().unwrap_or(PathBuf::from(".")); // TODO get cwd more consistently?
 	store_path.push("dashboard.db");
+
+	// Can be overruled from argv
+	for (index, arg) in args.iter().enumerate() {
+		if index <= 0 || arg.eq("--") {
+			continue;
+		}
+		store_path = PathBuf::from(arg.as_str());
+		break;
+	}
+
+	println!("path: {}", store_path.to_str().unwrap());
 
 	let store =
 		Arc::new(ApplicationState::new(store_path).expect("Failed creating application state"));
