@@ -134,7 +134,7 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, edit: bool) { // TODO make
 							.prefix("x")
 							.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
 					);
-					ui.checkbox(&mut panel.average, "avg");
+					ui.toggle_value(&mut panel.average, "avg");
 				}
 				ui.toggle_value(&mut panel.reduce, "reduce");
 			});
@@ -216,7 +216,7 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 	let chunk_size = if panel.reduce { Some(panel.view_chunks) } else { None };
 	for metric in metrics {
 		if metric.panel_id == panel.id {
-			let values = metric.values(min_x, max_x, chunk_size); 
+			let values = metric.values(min_x, max_x, chunk_size, panel.average); 
 			// if !panel.timeserie && panel.view_scroll && values.len() > 0 {
 			// 	let l = values.len() - 1;
 			// 	p = p.include_x(values[0].x)

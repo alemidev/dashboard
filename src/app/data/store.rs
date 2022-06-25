@@ -36,7 +36,8 @@ impl SQLiteDataStore {
 				reduce_view BOOL NOT NULL,
 				view_chunks INT NOT NULL,
 				shift_view BOOL NOT NULL,
-				view_offset INT NOT NULL
+				view_offset INT NOT NULL,
+				average_view BOOL NOT NULL
 			);",
 			[],
 		)?;
@@ -66,15 +67,6 @@ impl SQLiteDataStore {
 			);",
 			[],
 		)?;
-
-// BEGIN TRANSACTION;
-// CREATE TEMPORARY TABLE t1_backup(a,b);
-// INSERT INTO t1_backup SELECT a,b FROM t1;
-// DROP TABLE t1;
-// CREATE TABLE t1(a,b);
-// INSERT INTO t1 SELECT a,b FROM t1_backup;
-// DROP TABLE t1_backup;
-// COMMIT;
 
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS points (
@@ -308,6 +300,7 @@ impl SQLiteDataStore {
 				view_chunks: row.get(10)?,
 				shift: row.get(11)?,
 				view_offset: row.get(12)?,
+				average: row.get(13)?,
 			})
 		})?;
 
@@ -356,6 +349,7 @@ impl SQLiteDataStore {
 				view_chunks: row.get(10)?,
 				shift: row.get(11)?,
 				view_offset: row.get(12)?,
+				average: row.get(13)?,
 			})
 		})? {
 			if let Ok(p) = panel {
