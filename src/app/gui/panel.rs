@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use chrono::{Local, Utc};
 use eframe::{egui::{
 	plot::{Corner, GridMark, Legend, Line, Plot, Values},

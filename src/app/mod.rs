@@ -66,7 +66,7 @@ impl eframe::App for App {
 			SidePanel::left("sources-bar")
 				.width_range(280.0..=800.0)
 				.default_width(330.0)
-				.show(ctx, |ui| source_panel(self, ctx, ui));
+				.show(ctx, |ui| source_panel(self, ui));
 		}
 
 		CentralPanel::default().show(ctx, |ui| {
