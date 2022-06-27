@@ -13,7 +13,7 @@ pub fn confirmation_popup_delete_metric(app: &mut App, ui: &mut Ui, metric_index
 	ui.label("This will remove all its metrics and delete all points from archive. This action CANNOT BE UNDONE!");
 	ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 		ui.horizontal(|ui| {
-			if ui.button("yes").clicked() {
+			if ui.button("\n   yes   \n").clicked() {
 				let store = app.data.storage.lock().expect("Storage Mutex poisoned");
 				let mut metrics = app.data.metrics.write().expect("Metrics RwLock poisoned");
 				store.delete_metric(metrics[metric_index].id).expect("Failed deleting metric");
@@ -21,7 +21,7 @@ pub fn confirmation_popup_delete_metric(app: &mut App, ui: &mut Ui, metric_index
 				metrics.remove(metric_index);
 				app.deleting_metric = None;
 			}
-			if ui.button(" no ").clicked() {
+			if ui.button("\n   no    \n").clicked() {
 				app.deleting_metric = None;
 			}
 		});
@@ -34,7 +34,7 @@ pub fn confirmation_popup_delete_source(app: &mut App, ui: &mut Ui, source_index
 	ui.label("This will remove all its metrics and delete all points from archive. This action CANNOT BE UNDONE!");
 	ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 		ui.horizontal(|ui| {
-			if ui.button("YEAH").clicked() {
+			if ui.button("\n   yes   \n").clicked() {
 				let store = app.data.storage.lock().expect("Storage Mutex poisoned");
 				let mut sources = app.data.sources.write().expect("sources RwLock poisoned");
 				let mut metrics = app.data.metrics.write().expect("Metrics RwLock poisoned");
@@ -53,7 +53,7 @@ pub fn confirmation_popup_delete_source(app: &mut App, ui: &mut Ui, source_index
 				sources.remove(source_index);
 				app.deleting_source = None;
 			}
-			if ui.button(" NO WAY ").clicked() {
+			if ui.button("\n   no    \n").clicked() {
 				app.deleting_source = None;
 			}
 		});

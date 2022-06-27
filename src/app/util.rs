@@ -1,12 +1,49 @@
 use chrono::{DateTime, Local, NaiveDateTime, Utc};
-use eframe::egui::Color32;
-use std::sync::Arc;
+use eframe::egui::{Color32, plot::Value};
+use std::{sync::Arc, error::Error, path::PathBuf};
 use tracing_subscriber::Layer;
 
-use super::data::ApplicationState;
+use super::data::{ApplicationState, source::Metric};
 
 // if you're handling more than terabytes of data, it's the future and you ought to update this code!
 const PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
+
+pub fn serialize_values(values: &Vec<Value>, metric: &Metric, path: PathBuf) -> Result<(), Box<dyn Error>> {
+	let mut wtr = csv::Writer::from_writer(std::fs::File::create(path)?);
+	wtr.write_record(&[metric.name.as_str(), metric.query_x.as_str(), metric.query_y.as_str()])?;
+	for v in values {
+		wtr.serialize(("", v.x, v.y))?;
+	}
+	wtr.flush()?;
+	Ok(())
+}
+
+pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<Value>), Box<dyn Error>> {
+	let mut values = Vec::new();
+
+	let mut rdr = csv::Reader::from_reader(std::fs::File::open(path)?);
+	let mut name = "N/A".to_string();
+	let mut query_x = "".to_string();
+	let mut query_y = "".to_string();
+	if rdr.has_headers() {
+		let record = rdr.headers()?;
+		name = record[0].to_string();
+		query_x = record[1].to_string();
+		query_y = record[2].to_string();
+	}
+	for result in rdr.records() {
+		if let Ok(record) = result {
+			values.push(Value { x: record[1].parse::<f64>()?, y: record[2].parse::<f64>()? });
+		}
+	}
+
+	Ok((
+		name,
+		query_x,
+		query_y,
+		values,
+	))
+}
 
 pub fn human_size(size: u64) -> String {
 	let mut buf: f64 = size as f64;
