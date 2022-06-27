@@ -102,11 +102,23 @@ impl SQLiteDataStore {
 		Ok(values)
 	}
 
-	pub fn put_value(&self, metric_id: i32, v: Value) -> rusqlite::Result<usize> {
+	pub fn put_value(&self, metric_id: i32, v: &Value) -> rusqlite::Result<usize> {
 		self.conn.execute(
 			"INSERT INTO points(metric_id, x, y) VALUES (?, ?, ?)",
 			params![metric_id, v.x, v.y],
 		)
+	}
+
+	pub fn put_values(&mut self, metric_id: i32, values: &Vec<Value>) -> rusqlite::Result<()> {
+		let tx = self.conn.transaction()?;
+		for v in values {
+			tx.execute(
+				"INSERT INTO points(metric_id, x, y) VALUES (?, ?, ?)",
+				params![metric_id, v.x, v.y],
+			)?;
+		}
+		tx.commit()?;
+		Ok(())
 	}
 
 	pub fn delete_values(&self, metric_id: i32) -> rusqlite::Result<usize> {
@@ -327,11 +339,12 @@ impl SQLiteDataStore {
 		limit: bool,
 		reduce: bool,
 		shift: bool,
+		average: bool,
 		position: i32,
 	) -> rusqlite::Result<Panel> {
 		self.conn.execute(
-			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position, reduce_view, view_chunks, shift_view, view_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			params![name, view_scroll, view_size, timeserie, width, height, limit, position, reduce, view_chunks, shift, view_offset]
+			"INSERT INTO panels (name, view_scroll, view_size, timeserie, width, height, limit_view, position, reduce_view, view_chunks, shift_view, view_offset, average_view) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			params![name, view_scroll, view_size, timeserie, width, height, limit, position, reduce, view_chunks, shift, view_offset, average]
 		)?;
 		let mut statement = self.conn.prepare("SELECT * FROM panels WHERE name = ?")?;
 		for panel in statement.query_map(params![name], |row| {

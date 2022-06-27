@@ -54,18 +54,18 @@ impl eframe::App for App {
 		});
 
 		if let Some(index) = self.deleting_metric {
-			Window::new(format!("Delete Metric #{}", index))
+			Window::new(format!("Delete Metric #{}?", index))
 				.show(ctx, |ui| confirmation_popup_delete_metric(self, ui, index));
 		}
 		if let Some(index) = self.deleting_source {
-			Window::new(format!("Delete Source #{}", index))
+			Window::new(format!("Delete Source #{}?", index))
 				.show(ctx, |ui| confirmation_popup_delete_source(self, ui, index));
 		}
 
 		if self.sources {
 			SidePanel::left("sources-bar")
-				.width_range(280.0..=800.0)
-				.default_width(330.0)
+				.width_range(if self.edit { 400.0..=1000.0 } else { 280.0..=680.0 })
+				.default_width(if self.edit { 450.0 } else { 330.0 })
 				.show(ctx, |ui| source_panel(self, ui));
 		}
 

@@ -1,6 +1,6 @@
 [package]
 name = "dashboard"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 
 [[bin]]
@@ -21,7 +21,9 @@ tracing = "0.1" # egui / eframe use tracing
 tracing-subscriber = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+csv = "1.1"
 rusqlite = "0.27"
 jql = { version = "4", default-features = false }
 ureq = { version = "2", features = ["json"] }
+rfd = "0.9"
 eframe = "0.18"

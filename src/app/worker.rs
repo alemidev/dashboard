@@ -88,6 +88,7 @@ impl BackgroundWorker for NativeBackgroundWorker {
 							.expect("Sources RwLock poisoned");
 						*last_update = Utc::now();
 						let state2 = state.clone();
+						let source_name = sources[j].name.clone();
 						let url = sources[j].url.clone();
 						std::thread::spawn(move || {
 							// TODO this can overspawn if a request takes longer than the refresh interval!
@@ -100,12 +101,12 @@ impl BackgroundWorker for NativeBackgroundWorker {
 											match metric.extract(&res) {
 												Ok(v) => {
 													metric.data.write().expect("Data RwLock poisoned").push(v);
-													if let Err(e) = store.put_value(metric.id, v) {
+													if let Err(e) = store.put_value(metric.id, &v) {
 														warn!(target:"background-worker", "Could not put sample for source #{} in db: {:?}", s_id, e);
 													}
 												}
 												Err(e) => {
-													warn!(target:"background-worker", "[{}] Could not extract value from result: {:?}", metric.name, e); // TODO: more info!
+													warn!(target:"background-worker", "[{}|{}] Could not extract value from result: {:?}", source_name, metric.name, e); // TODO: more info!
 												}
 											}
 										}

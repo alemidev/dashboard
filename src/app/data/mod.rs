@@ -92,6 +92,7 @@ impl ApplicationState {
 				false,
 				false,
 				false,
+				true,
 				self.panels.read().expect("Panels RwLock poisoned").len() as i32, // todo can this be made more compact and without acquisition?
 			)?; // TODO make values customizable and useful
 		self.panels
