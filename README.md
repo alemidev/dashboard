@@ -10,6 +10,15 @@ This software periodically (customizable interval) makes a GET request to given 
 Each panel displays all points gathered respecting limits, without redrawing until user interacts with UI or data changes.
 If no "x" query is specified, current time will be used (as timestamp) for each sample "x" coordinate, making this software especially useful for timeseries.
 
+## Usage
+This program will work on a database stored in `$HOME/.local/share/dashboard.db`. By default, nothing will be shown.
+To add sources or panels, toggle edit mode (top left). Once in edit mode you can:
+* Add panels (top bar)
+* Add sources (in source sidebar, bottom)
+* Edit panels (name, height, display options)
+* Edit sources (name, color, query, panel)
+Each change is effective as soon as you type it, but won't persist a restart if you don't "save" it. Just close and reopen if you mess something up!
+
 ## Features
 * parse JSON apis with [JQL syntax](https://github.com/yamafaktory/jql)
 * embedded SQLite, no need for external database
@@ -20,14 +29,15 @@ If no "x" query is specified, current time will be used (as timestamp) for each 
 * reduce data points with average or sampling
 * per-source query interval
 * light/dark mode
+* log panel endlessly tracking errors
+* tiny performance impact
 
-## Usage
-This program will work on a database stored in `$HOME/.local/share/dashboard.db`. By default, nothing will be shown.
-To add sources or panels, toggle edit mode (top left). Once in edit mode you can:
-* Add panels (top bar)
-* Add sources (in source sidebar, bottom)
-* Edit panels (name, height, display options)
-* Edit sources (name, color, query, panel)
+## Drawbacks
+* Log panel has no limit, thus very long runtimes will make it slower
+* Being monolithic, this project doesn't scale well with large data needs
+* Untested on Windows and MacOS
+* No limit on points displayed might slow down the UI, use the `reduce` feature
+* All fields are editable at the same time
 
 # Installation
 `cargo build --release`, then drop it in your `~/.local/bin`. Done, have fun hoarding data!
