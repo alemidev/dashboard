@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local, NaiveDateTime, Utc};
-use eframe::egui::{Color32, plot::Value};
+use eframe::egui::{Color32, plot::PlotPoint};
 use std::{sync::Arc, error::Error, path::PathBuf};
 use tracing_subscriber::Layer;
 
@@ -8,7 +8,7 @@ use super::data::{ApplicationState, source::Metric};
 // if you're handling more than terabytes of data, it's the future and you ought to update this code!
 const PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
 
-pub fn serialize_values(values: &Vec<Value>, metric: &Metric, path: PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn serialize_values(values: &Vec<PlotPoint>, metric: &Metric, path: PathBuf) -> Result<(), Box<dyn Error>> {
 	let mut wtr = csv::Writer::from_writer(std::fs::File::create(path)?);
 	wtr.write_record(&[metric.name.as_str(), metric.query_x.as_str(), metric.query_y.as_str()])?;
 	for v in values {
@@ -18,7 +18,7 @@ pub fn serialize_values(values: &Vec<Value>, metric: &Metric, path: PathBuf) -> 
 	Ok(())
 }
 
-pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<Value>), Box<dyn Error>> {
+pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<PlotPoint>), Box<dyn Error>> {
 	let mut values = Vec::new();
 
 	let mut rdr = csv::Reader::from_reader(std::fs::File::open(path)?);
@@ -33,7 +33,7 @@ pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<
 	}
 	for result in rdr.records() {
 		if let Ok(record) = result {
-			values.push(Value { x: record[1].parse::<f64>()?, y: record[2].parse::<f64>()? });
+			values.push(PlotPoint { x: record[1].parse::<f64>()?, y: record[2].parse::<f64>()? });
 		}
 	}
 

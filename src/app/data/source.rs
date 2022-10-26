@@ -1,6 +1,6 @@
 use super::FetchError;
 use chrono::{DateTime, Utc};
-use eframe::egui::plot::Value;
+use eframe::egui::plot::PlotPoint;
 use eframe::epaint::Color32;
 use std::sync::RwLock;
 
@@ -64,14 +64,14 @@ impl Default for Source {
 	}
 }
 
-fn avg_value(values: &[Value]) -> Value {
+fn avg_value(values: &[PlotPoint]) -> PlotPoint {
 	let mut x = 0.0;
 	let mut y = 0.0;
 	for v in values {
 		x += v.x;
 		y += v.y;
 	}
-	return Value {
+	return PlotPoint {
 		x: x / values.len() as f64,
 		y: y / values.len() as f64,
 	};
@@ -101,7 +101,7 @@ pub struct Metric {
 	pub query_x: String,
 	pub query_y: String,
 	pub(crate) panel_id: i32,
-	pub(crate) data: RwLock<Vec<Value>>,
+	pub(crate) data: RwLock<Vec<PlotPoint>>,
 }
 
 impl Default for Metric {
@@ -120,7 +120,7 @@ impl Default for Metric {
 }
 
 impl Metric {
-	pub fn extract(&self, value: &serde_json::Value) -> Result<Value, FetchError> {
+	pub fn extract(&self, value: &serde_json::Value) -> Result<PlotPoint, FetchError> {
 		let x: f64;
 		if self.query_x.len() > 0 {
 			x = jql::walker(value, self.query_x.as_str())?
@@ -132,7 +132,7 @@ impl Metric {
 		let y = jql::walker(value, self.query_y.as_str())?
 			.as_f64()
 			.ok_or(FetchError::JQLError("Y query is null".to_string()))?;
-		Ok(Value { x, y })
+		Ok(PlotPoint { x, y })
 	}
 
 	pub fn values(
@@ -141,8 +141,8 @@ impl Metric {
 		max_x: Option<f64>,
 		chunk_size: Option<u32>,
 		average: bool,
-	) -> Vec<Value> {
-		let mut values = self.data.read().expect("Values RwLock poisoned").clone();
+	) -> Vec<PlotPoint> {
+		let mut values = self.data.read().expect("PlotPoints RwLock poisoned").clone();
 		if let Some(min_x) = min_x {
 			values.retain(|x| x.x > min_x);
 		}
@@ -153,7 +153,7 @@ impl Metric {
 			if chunk_size > 0 {
 				// TODO make this nested if prettier
 				let iter = values.chunks(chunk_size as usize);
-				values = iter.map(|x| if average { avg_value(x) } else { if x.len() > 0 { x[x.len()-1] } else { Value {x: 0.0, y:0.0 }} }).collect();
+				values = iter.map(|x| if average { avg_value(x) } else { if x.len() > 0 { x[x.len()-1] } else { PlotPoint {x: 0.0, y:0.0 }} }).collect();
 			}
 		}
 		values

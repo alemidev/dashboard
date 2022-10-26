@@ -86,7 +86,7 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 		ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 			ui.horizontal(|ui| {
 				if ui.small_button("×").clicked() {
-					frame.quit();
+					frame.close();
 				}
 			});
 		});

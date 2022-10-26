@@ -1,6 +1,6 @@
 use chrono::{Local, Utc};
 use eframe::{egui::{
-	plot::{Corner, GridMark, Legend, Line, Plot, Values},
+	plot::{Corner, GridMark, Legend, Line, Plot, PlotPoints},
 	DragValue, Layout, Ui, Slider, TextEdit, ScrollArea, collapsing_header::CollapsingState, Context,
 }, emath::Vec2};
 use tracing::error;
@@ -101,7 +101,7 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut Panel, edit: bool) { // TODO make
 		} else {
 			ui.heading(panel.name.as_str());
 		}
-		ui.with_layout(Layout::right_to_left(), |ui| {
+		ui.with_layout(Layout::right_to_left(eframe::emath::Align::Min), |ui| {
 			ui.horizontal(|ui| {
 				ui.toggle_value(&mut panel.view_scroll, "🔒");
 				ui.separator();
@@ -222,8 +222,9 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &mut Panel, metrics: &Vec<Metric>) {
 			// 		.include_y(values[0].y)
 			// 		.include_y(values[l].y);
 			// }
+			let values_splice : Vec<[f64;2]> = values.iter().map(|x| [x.x, x.y]).collect();
 			lines.push(
-				Line::new(Values::from_values(values))
+				Line::new(values_splice)
 					.name(metric.name.as_str())
 					.color(metric.color)
 			);
