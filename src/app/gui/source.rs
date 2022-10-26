@@ -14,6 +14,7 @@ use crate::app::{
 use super::metric::{metric_display_ui, metric_edit_ui};
 
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
+	let mut source_to_put_metric_on : Option<i32> = None;
 	let mut to_swap: Option<usize> = None;
 	let mut to_insert: Vec<Metric> = Vec::new();
 	// let mut to_delete: Option<usize> = None;
@@ -103,12 +104,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 										);
 										ui.add_space(2.0);
 										if ui.small_button("          +          ").clicked() {
-											// TODO find a better
-											if let Err(e) =
-												app.data.add_metric(&app.input_metric, source)
-											{
-												error!(target: "ui", "Error adding metric : {:?}", e);
-											}
+											source_to_put_metric_on = Some(source.id);
 										}
 										ui.add_space(1.0); // DAMN!
 										if ui.small_button("o").clicked() {
@@ -206,6 +202,17 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 		let mut metrics = app.data.metrics.write().expect("Metrics RwLock poisoned");
 		for m in to_insert {
 			metrics.push(m);
+		}
+	}
+	if let Some(s) = source_to_put_metric_on {
+		for source in app.data.sources.read().expect("Sources RwLock poisoned").iter() {
+			if source.id == s {
+				if let Err(e) =
+					app.data.add_metric(&app.input_metric, &source)
+				{
+					error!(target: "ui", "Error adding metric : {:?}", e);
+				}
+			}
 		}
 	}
 }
