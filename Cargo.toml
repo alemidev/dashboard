@@ -8,8 +8,6 @@ name = "dashboard_bin"
 path = "src/main.rs"
 
 [features]
-default = ["bundled"]
-bundled = ["rusqlite/bundled"]
 web = ["chrono/wasmbind", "eframe/persistence"]
 
 [dependencies]
@@ -22,8 +20,14 @@ tracing-subscriber = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 csv = "1.1"
-rusqlite = "0.27"
 jql = { version = "4", default-features = false }
-ureq = { version = "2", features = ["json"] }
 rfd = "0.9"
-eframe = "0.18"
+eframe = "0.19"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+sea-orm = { version = "0.10", features = [ "runtime-tokio-rustls", "sqlx-sqlite", "macros" ] }
+reqwest = { version = "0.11", features = ["json"] }
+
+[profile.dev.package."*"]
+opt-level = 3

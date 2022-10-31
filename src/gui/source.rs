@@ -1,35 +1,33 @@
 use eframe::{
-	egui::{Checkbox, DragValue, Layout, ScrollArea, TextEdit, Ui},
-	emath::Align, epaint::Color32,
+	egui::{Layout, ScrollArea, Ui},
+	emath::Align,
 };
 use rfd::FileDialog;
 use tracing::error;
 
-use crate::app::{
-	data::source::{Metric, Source},
-	util::{deserialize_values, serialize_values},
-	App,
-};
+use crate::util::deserialize_values;
+use crate::gui::App;
+use crate::data::entities;
 
 use super::metric::{metric_display_ui, metric_edit_ui};
 
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	let mut source_to_put_metric_on : Option<i32> = None;
 	let mut to_swap: Option<usize> = None;
-	let mut to_insert: Vec<Metric> = Vec::new();
+	let _to_insert: Vec<entities::metrics::Model> = Vec::new();
 	// let mut to_delete: Option<usize> = None;
-	let panels = app.data.panels.read().expect("Panels RwLock poisoned");
+	let panels = &app.panels;
 	let panel_width = ui.available_width();
 	ScrollArea::vertical()
 		.max_width(panel_width)
 		.show(ui, |ui| {
 			// TODO only vertical!
 			{
-				let mut sources = app.data.sources.write().expect("Sources RwLock poisoned");
+				let sources = app.sources.borrow();
 				let sources_count = sources.len();
 				ui.heading("Sources");
 				ui.separator();
-				for (i, source) in sources.iter_mut().enumerate() {
+				for (i, source) in sources.iter().enumerate() {
 					ui.horizontal(|ui| {
 						if app.edit { // show buttons to move sources up and down
 							ui.vertical(|ui| {
@@ -53,16 +51,14 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 									ui.horizontal(|ui| {
 										source_edit_ui(ui, source, remaining_width - 34.0);
 										if ui.small_button("×").clicked() {
-											app.deleting_metric = None;
-											app.deleting_source = Some(i);
+											// app.deleting_metric = None;
+											// app.deleting_source = Some(i);
 										}
 									});
-									let mut metrics = app
-										.data
+									let metrics = app
 										.metrics
-										.write()
-										.expect("Metrics RwLock poisoned");
-									for (j, metric) in metrics.iter_mut().enumerate() {
+										.borrow();
+									for (_j, metric) in metrics.iter().enumerate() {
 										if metric.source_id == source.id {
 											ui.horizontal(|ui| {
 												metric_edit_ui(
@@ -76,21 +72,21 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 														.add_filter("csv", &["csv"])
 														.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
 														.save_file();
-													if let Some(path) = path {
-														serialize_values(
-															&*metric
-																.data
-																.read()
-																.expect("Values RwLock poisoned"),
-															metric,
-															path,
-														)
-														.expect("Could not serialize data");
+													if let Some(_path) = path {
+														// serialize_values(
+														// 	&*metric
+														// 		.data
+														// 		.read()
+														// 		.expect("Values RwLock poisoned"),
+														// 	metric,
+														// 	path,
+														// )
+														// .expect("Could not serialize data");
 													}
 												}
 												if ui.small_button("×").clicked() {
-													app.deleting_source = None;
-													app.deleting_metric = Some(j);
+													// app.deleting_source = None;
+													// app.deleting_metric = Some(j);
 												}
 											});
 										}
@@ -98,7 +94,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 									ui.horizontal(|ui| {
 										metric_edit_ui(
 											ui,
-											&mut app.input_metric,
+											&mut app.buffer_metric,
 											None,
 											remaining_width - 53.0,
 										);
@@ -113,30 +109,30 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 												.pick_file();
 											if let Some(path) = path {
 												match deserialize_values(path) {
-													Ok((name, query_x, query_y, data)) => {
-														let mut store = app
-															.data
-															.storage
-															.lock()
-															.expect("Storage Mutex poisoned");
-														match store.new_metric(
-															name.as_str(),
-															source.id,
-															query_x.as_str(),
-															query_y.as_str(),
-															-1,
-															Color32::TRANSPARENT,
-															metrics.len() as i32,
-														) {
-															Ok(verified_metric) => {
-																store.put_values(verified_metric.id, &data).unwrap();
-																*verified_metric.data.write().expect("Values RwLock poisoned") = data;
-																to_insert.push(verified_metric);
-															}
-															Err(e) => {
-																error!(target: "ui", "could not save metric into archive : {:?}", e);
-															}
-														}
+													Ok((_name, _query_x, _query_y, _data)) => {
+														// let mut store = app
+														// 	.data
+														// 	.storage
+														// 	.lock()
+														// 	.expect("Storage Mutex poisoned");
+														// match store.new_metric(
+														// 	name.as_str(),
+														// 	source.id,
+														// 	query_x.as_str(),
+														// 	query_y.as_str(),
+														// 	-1,
+														// 	Color32::TRANSPARENT,
+														// 	metrics.len() as i32,
+														// ) {
+														// 	Ok(verified_metric) => {
+														// 		store.put_values(verified_metric.id, &data).unwrap();
+														// 		*verified_metric.data.write().expect("Values RwLock poisoned") = data;
+														// 		to_insert.push(verified_metric);
+														// 	}
+														// 	Err(e) => {
+														// 		error!(target: "ui", "could not save metric into archive : {:?}", e);
+														// 	}
+														// }
 													}
 													Err(e) => {
 														error!(target: "ui", "Could not deserialize metric from file : {:?}", e);
@@ -145,13 +141,12 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 											}
 										}
 										if ui.small_button("×").clicked() {
-											app.input_metric = Metric::default();
+											app.buffer_metric = entities::metrics::Model::default();
 										}
 									})
 								});
 							} else {
-								let metrics =
-									app.data.metrics.read().expect("Metrics RwLock poisoned");
+								let metrics = app.metrics.borrow();
 								source_display_ui(ui, source, remaining_width);
 								for metric in metrics.iter() {
 									if metric.source_id == source.id {
@@ -171,17 +166,17 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 					ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 						ui.horizontal(|ui| {
 							if ui.button("add").clicked() {
-								if let Err(e) = app.data.add_source(&app.input_source) {
-									error!(target: "ui", "Error adding source : {:?}", e);
-								} else {
-									app.input_source.id += 1;
-								}
+								// if let Err(e) = app.data.add_source(&app.input_source) {
+								// 	error!(target: "ui", "Error adding source : {:?}", e);
+								// } else {
+								// 	app.input_source.id += 1;
+								// }
 							}
 							ui.toggle_value(&mut app.padding, "#");
 						});
 					});
 				});
-				source_edit_ui(ui, &mut app.input_source, panel_width - 10.0);
+				source_edit_ui(ui, &mut app.buffer_source, panel_width - 10.0);
 				ui.add_space(5.0);
 				if app.padding {
 					ui.add_space(300.0);
@@ -193,53 +188,53 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	//	let mut panels = app.data.panels.write().expect("Panels RwLock poisoned");
 	//	panels.remove(i);
 	// } else
-	if let Some(i) = to_swap {
-		// TODO can this be done in background? idk
-		let mut sources = app.data.sources.write().expect("Sources RwLock poisoned");
-		sources.swap(i - 1, i);
-	}
-	if to_insert.len() > 0 {
-		let mut metrics = app.data.metrics.write().expect("Metrics RwLock poisoned");
-		for m in to_insert {
-			metrics.push(m);
-		}
-	}
+	// if let Some(i) = to_swap {
+	// 	// TODO can this be done in background? idk
+	// 	let mut sources = app.sources.borrow();
+	// 	sources.swap(i - 1, i);
+	// }
+	// if to_insert.len() > 0 {
+	// 	let mut metrics = app.metrics.borrow();
+	// 	for m in to_insert {
+	// 		metrics.push(m);
+	// 	}
+	// }
 	if let Some(s) = source_to_put_metric_on {
-		for source in app.data.sources.read().expect("Sources RwLock poisoned").iter() {
+		for source in app.sources.borrow().iter() {
 			if source.id == s {
-				if let Err(e) =
-					app.data.add_metric(&app.input_metric, &source)
-				{
-					error!(target: "ui", "Error adding metric : {:?}", e);
-				}
+				// if let Err(e) =
+				// 	app.data.add_metric(&app.input_metric, &source)
+				// {
+				// 	error!(target: "ui", "Error adding metric : {:?}", e);
+				// }
 			}
 		}
 	}
 }
 
-pub fn source_display_ui(ui: &mut Ui, source: &mut Source, _width: f32) {
-	ui.horizontal(|ui| {
-		ui.add_enabled(false, Checkbox::new(&mut source.enabled, ""));
-		ui.add_enabled(
-			false,
-			DragValue::new(&mut source.interval).clamp_range(1..=120),
-		);
-		ui.heading(&source.name).on_hover_text(&source.url);
-	});
+pub fn source_display_ui(_ui: &mut Ui, _source: &entities::sources::Model, _width: f32) {
+	// ui.horizontal(|ui| {
+	// 	ui.add_enabled(false, Checkbox::new(&mut source.enabled, ""));
+	// 	ui.add_enabled(
+	// 		false,
+	// 		DragValue::new(&mut source.interval).clamp_range(1..=120),
+	// 	);
+	// 	ui.heading(&source.name).on_hover_text(&source.url);
+	// });
 }
 
-pub fn source_edit_ui(ui: &mut Ui, source: &mut Source, width: f32) {
-	ui.horizontal(|ui| {
-		let text_width = width - 100.0;
-		ui.checkbox(&mut source.enabled, "");
-		ui.add(DragValue::new(&mut source.interval).clamp_range(1..=3600));
-		TextEdit::singleline(&mut source.name)
-			.desired_width(text_width / 4.0)
-			.hint_text("name")
-			.show(ui);
-		TextEdit::singleline(&mut source.url)
-			.desired_width(text_width * 3.0 / 4.0)
-			.hint_text("url")
-			.show(ui);
-	});
+pub fn source_edit_ui(_ui: &mut Ui, _source: &entities::sources::Model, _width: f32) {
+	// ui.horizontal(|ui| {
+	// 	let text_width = width - 100.0;
+	// 	ui.checkbox(&mut source.enabled, "");
+	// 	ui.add(DragValue::new(&mut source.interval).clamp_range(1..=3600));
+	// 	TextEdit::singleline(&mut source.name)
+	// 		.desired_width(text_width / 4.0)
+	// 		.hint_text("name")
+	// 		.show(ui);
+	// 	TextEdit::singleline(&mut source.url)
+	// 		.desired_width(text_width * 3.0 / 4.0)
+	// 		.hint_text("url")
+	// 		.show(ui);
+	// });
 }

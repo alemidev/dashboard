@@ -3,14 +3,20 @@ use eframe::egui::{Color32, plot::PlotPoint};
 use std::{sync::Arc, error::Error, path::PathBuf};
 use tracing_subscriber::Layer;
 
-use super::data::{ApplicationState, source::Metric};
+use super::data::{ApplicationState, entities};
 
 // if you're handling more than terabytes of data, it's the future and you ought to update this code!
-const PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
+const _PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
 
-pub fn serialize_values(values: &Vec<PlotPoint>, metric: &Metric, path: PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn _serialize_values(values: &Vec<PlotPoint>, metric: &entities::metrics::Model, path: PathBuf) -> Result<(), Box<dyn Error>> {
 	let mut wtr = csv::Writer::from_writer(std::fs::File::create(path)?);
-	wtr.write_record(&[metric.name.as_str(), metric.query_x.as_str(), metric.query_y.as_str()])?;
+	// DAMN!   VVVVV
+	let def_q_x = "".into();
+	let name = metric.name.as_str();
+	let q_x = metric.query_x.as_ref().unwrap_or(&def_q_x).as_str();
+	let q_y = metric.query_y.as_str();
+	wtr.write_record(&[name, q_x, q_y])?;
+	// DAMN!   AAAAA
 	for v in values {
 		wtr.serialize(("", v.x, v.y))?;
 	}
@@ -45,15 +51,15 @@ pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<
 	))
 }
 
-pub fn human_size(size: u64) -> String {
+pub fn _human_size(size: u64) -> String {
 	let mut buf: f64 = size as f64;
 	let mut prefix: usize = 0;
-	while buf > 1024.0 && prefix < PREFIXES.len() - 1 {
+	while buf > 1024.0 && prefix < _PREFIXES.len() - 1 {
 		buf /= 1024.0;
 		prefix += 1;
 	}
 
-	return format!("{:.3} {}B", buf, PREFIXES[prefix]);
+	return format!("{:.3} {}B", buf, _PREFIXES[prefix]);
 }
 
 pub fn timestamp_to_str(t: i64, date: bool, time: bool) -> String {
@@ -95,12 +101,12 @@ pub fn repack_color(c: Color32) -> u32 {
 }
 
 pub struct InternalLogger {
-	state: Arc<ApplicationState>,
+	_state: Arc<ApplicationState>,
 }
 
 impl InternalLogger {
-	pub fn new(state: Arc<ApplicationState>) -> Self {
-		InternalLogger { state }
+	pub fn _new(state: Arc<ApplicationState>) -> Self {
+		InternalLogger { _state: state }
 	}
 }
 
@@ -117,18 +123,18 @@ where
 			msg: "".to_string(),
 		};
 		event.record(&mut msg_visitor);
-		let out = format!(
+		let _out = format!(
 			"{} [{}] {}: {}",
 			Local::now().format("%H:%M:%S"),
 			event.metadata().level(),
 			event.metadata().target(),
 			msg_visitor.msg
 		);
-		self.state
-			.diagnostics
-			.write()
-			.expect("Diagnostics RwLock poisoned")
-			.push(out);
+		// self.state
+		// 	.diagnostics
+		// 	.write()
+		// 	.expect("Diagnostics RwLock poisoned")
+		// 	.push(out);
 	}
 }
 
