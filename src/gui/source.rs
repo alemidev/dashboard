@@ -12,7 +12,7 @@ use crate::data::entities;
 use super::metric::metric_edit_ui;
 
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
-	let mut source_to_put_metric_on : Option<i32> = None;
+	let mut source_to_put_metric_on : Option<i64> = None;
 	let mut to_swap: Option<usize> = None;
 	let _to_insert: Vec<entities::metrics::Model> = Vec::new();
 	// let mut to_delete: Option<usize> = None;

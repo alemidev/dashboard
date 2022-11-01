@@ -83,7 +83,7 @@ pub fn timestamp_to_str(t: i64, date: bool, time: bool) -> String {
 	)
 }
 
-pub fn unpack_color(c: u32) -> Color32 {
+pub fn unpack_color(c: i32) -> Color32 {
 	let r: u8 = (c >> 0) as u8;
 	let g: u8 = (c >> 8) as u8;
 	let b: u8 = (c >> 16) as u8;
@@ -92,11 +92,11 @@ pub fn unpack_color(c: u32) -> Color32 {
 }
 
 #[allow(dead_code)]
-pub fn repack_color(c: Color32) -> u32 {
-	let mut out: u32 = 0;
+pub fn repack_color(c: Color32) -> i32 {
+	let mut out: i32 = 0;
 	let mut offset = 0;
 	for el in c.to_array() {
-		out |= ((el & 0xFF) as u32) << offset;
+		out |= ((el & 0xFF) as i32) << offset;
 		offset += 8;
 	}
 	return out;

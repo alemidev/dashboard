@@ -10,13 +10,13 @@ use crate::data::FetchError;
 #[sea_orm(table_name = "metrics")]
 pub struct Model {
 	#[sea_orm(primary_key, auto_increment = false)]
-	pub id: i32,
+	pub id: i64,
 	pub name: String,
-	pub source_id: i32,
+	pub source_id: i64,
 	pub query_x: Option<String>,
 	pub query_y: String,
-	pub panel_id: i32,
-	pub color: u32,
+	pub panel_id: i64,
+	pub color: i32,
 	pub position: i32,
 }
 

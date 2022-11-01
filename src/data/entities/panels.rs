@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "panels")]
 pub struct Model {
 	#[sea_orm(primary_key, auto_increment = true)]
-	pub id: i32,
+	pub id: i64,
 	pub name: String,
 	pub view_scroll: bool,
 	pub view_size: i32,

@@ -49,6 +49,14 @@ struct CliArgs {
 	log_size: u64,
 }
 
+// When compiling for web:
+#[cfg(target_arch = "wasm32")]
+fn setup_tracing(_layer: InternalLoggerLayer) {
+	// Make sure panics are logged using `console.error`.
+	console_error_panic_hook::set_once();
+	// Redirect tracing to console.log and friends:
+	tracing_wasm::set_as_global_default();
+}
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
@@ -59,15 +67,6 @@ fn setup_tracing(layer: InternalLoggerLayer) {
 		.with(tracing_subscriber::fmt::Layer::new())
 		.with(layer)
 		.init();
-}
-
-// When compiling for web:
-#[cfg(target_arch = "wasm32")]
-fn setup_tracing(_layer: InternalLoggerLayer) {
-	// Make sure panics are logged using `console.error`.
-	console_error_panic_hook::set_once();
-	// Redirect tracing to console.log and friends:
-	tracing_wasm::set_as_global_default();
 }
 
 fn main() {

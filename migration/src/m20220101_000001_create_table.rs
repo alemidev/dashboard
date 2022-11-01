@@ -17,7 +17,7 @@ impl MigrationTrait for Migration {
 					.if_not_exists()
 					.col(
 						ColumnDef::new(Panels::Id)
-							.integer()
+							.big_integer()
 							.not_null()
 							.auto_increment()
 							.primary_key(),
@@ -26,6 +26,7 @@ impl MigrationTrait for Migration {
 					.col(ColumnDef::new(Panels::Position).integer().not_null())
 					.col(ColumnDef::new(Panels::Timeserie).boolean().not_null())
 					.col(ColumnDef::new(Panels::Height).integer().not_null())
+					.col(ColumnDef::new(Panels::Width).integer().not_null())
 					.col(ColumnDef::new(Panels::ViewScroll).boolean().not_null())
 					.col(ColumnDef::new(Panels::LimitView).boolean().not_null())
 					.col(ColumnDef::new(Panels::ViewSize).integer().not_null())
@@ -43,7 +44,7 @@ impl MigrationTrait for Migration {
 					.if_not_exists()
 					.col(
 						ColumnDef::new(Sources::Id)
-							.integer()
+							.big_integer()
 							.not_null()
 							.auto_increment()
 							.primary_key(),
@@ -62,15 +63,15 @@ impl MigrationTrait for Migration {
 					.if_not_exists()
 					.col(
 						ColumnDef::new(Metrics::Id)
-							.integer()
+							.big_integer()
 							.not_null()
 							.auto_increment()
 							.primary_key(),
 					)
 					.col(ColumnDef::new(Metrics::Name).string().not_null())
 					.col(ColumnDef::new(Metrics::Position).integer().not_null())
-					.col(ColumnDef::new(Metrics::PanelId).integer().not_null())
-					.col(ColumnDef::new(Metrics::SourceId).integer().not_null())
+					.col(ColumnDef::new(Metrics::PanelId).big_integer().not_null())
+					.col(ColumnDef::new(Metrics::SourceId).big_integer().not_null())
 					.col(ColumnDef::new(Metrics::QueryX).string().not_null())
 					.col(ColumnDef::new(Metrics::QueryY).string().not_null())
 					.col(ColumnDef::new(Metrics::Color).integer().not_null())
@@ -83,14 +84,14 @@ impl MigrationTrait for Migration {
 					.if_not_exists()
 					.col(
 						ColumnDef::new(Points::Id)
-							.integer()
+							.big_integer()
 							.not_null()
 							.auto_increment()
 							.primary_key(),
 					)
-					.col(ColumnDef::new(Points::MetricId).integer().not_null())
-					.col(ColumnDef::new(Points::X).float().not_null())
-					.col(ColumnDef::new(Points::Y).float().not_null())
+					.col(ColumnDef::new(Points::MetricId).big_integer().not_null())
+					.col(ColumnDef::new(Points::X).double().not_null())
+					.col(ColumnDef::new(Points::Y).double().not_null())
 					.to_owned(),
 			).await?;
 		Ok(())
@@ -121,6 +122,7 @@ enum Panels {
 	Position,
 	Timeserie,
 	Height,
+	Width,
 	ViewScroll,
 	LimitView,
 	ViewSize,

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set};
+use sea_orm::{DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order};
 use tokio::sync::{watch, mpsc};
 use tracing::info;
 use std::collections::VecDeque;
@@ -174,6 +174,7 @@ impl AppState {
 								.add(entities::points::Column::X.gte((now - new_width) as f64))
 								.add(entities::points::Column::X.lte(now as f64))
 						)
+						.order_by(entities::points::Column::X, Order::Asc)
 						.all(&db)
 						.await.unwrap().into();
 					self.tx.points.send(self.points.clone().into()).unwrap();
@@ -194,6 +195,7 @@ impl AppState {
 									.add(entities::points::Column::X.gte(now - new_width))
 									.add(entities::points::Column::X.lte(now - width))
 							)
+							.order_by(entities::points::Column::X, Order::Asc)
 							.all(&db)
 							.await.unwrap();
 						info!(target: "worker", "Fetched {} previous points", previous_points.len());
@@ -211,6 +213,7 @@ impl AppState {
 								.add(entities::points::Column::X.gte(last as f64))
 								.add(entities::points::Column::X.lte(now as f64))
 						)
+						.order_by(entities::points::Column::X, Order::Asc)
 						.all(&db)
 						.await.unwrap();
 					info!(target: "worker", "Fetched {} new points", new_points.len());
