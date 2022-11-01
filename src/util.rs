@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use eframe::egui::{Color32, plot::PlotPoint};
 use tokio::sync::{watch, mpsc};
+use tracing::error;
 use std::{error::Error, path::PathBuf, collections::VecDeque};
 use tracing_subscriber::Layer;
 
@@ -136,7 +137,9 @@ impl InternalLogger {
 							while messages.len() > self.size {
 								messages.pop_front();
 							}
-							self.view_tx.send(messages.clone().into()).unwrap();
+							if let Err(e) = self.view_tx.send(messages.clone().into()) {
+								error!(target: "internal-logger", "Failed sending log line: {:?}", e);
+							}
 						},
 						None => break,
 					}

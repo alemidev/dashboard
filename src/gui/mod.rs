@@ -7,6 +7,7 @@ mod scaffold;
 use chrono::Utc;
 use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel, Window};
 use tokio::sync::watch;
+use tracing::error;
 
 use crate::{data::entities, worker::visualizer::AppStateView};
 use panel::main_content;
@@ -62,13 +63,17 @@ impl App {
 	}
 
 	pub fn save_all_panels(&self) {
-		self.view.op.blocking_send(
+		if let Err(e) = self.view.op.blocking_send(
 			crate::worker::visualizer::BackgroundAction::UpdateAllPanels { panels: self.panels.clone() }
-		).unwrap();
+		) {
+			error!(target: "app", "Could not save panels: {:?}", e);
+		}
 	}
 
 	pub fn refresh_data(&self) {
-		self.view.flush.blocking_send(()).unwrap();
+		if let Err(e) = self.view.flush.blocking_send(()) {
+			error!(target: "app", "Could not request flush: {:?}", e);
+		}
 	}
 }
 
@@ -82,7 +87,7 @@ impl eframe::App for App {
 			footer(ctx, ui, self.logger_view.clone(), self.db_path.clone(), self.view.points.borrow().len());
 		});
 
-		let w = Window::new("a");
+		let _w = Window::new("a");
 
 		// if let Some(index) = self.deleting_metric {
 		// 	Window::new(format!("Delete Metric #{}?", index))
@@ -109,7 +114,9 @@ impl eframe::App for App {
 		});
 
 		if let Some(viewsize) = self.panels.iter().map(|p| p.view_size).max() {
-			self.width_tx.send(viewsize as i64).unwrap();
+			if let Err(e) = self.width_tx.send(viewsize as i64) {
+				error!(target: "app", "Could not update fetch size : {:?}", e);
+			}
 		}
 
 		if Utc::now().timestamp() > self.last_redraw + self.interval {

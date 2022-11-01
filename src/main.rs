@@ -83,11 +83,17 @@ fn main() {
 
 	setup_tracing(logger.layer());
 
-	let state = AppState::new(
+	let state = match AppState::new(
 		width_rx,
 		args.interval as i64,
 		args.cache_time as i64,
-	).unwrap();
+	) {
+		Ok(s) => s,
+		Err(e) => {
+			error!(target: "launcher", "Could not create application state: {:?}", e);
+			return;
+		}
+	};
 
 	let view = state.view();
 	let run_rx_clone = run_rx.clone();
@@ -99,7 +105,13 @@ fn main() {
 			.build()
 			.unwrap()
 			.block_on(async {
-				let db = Database::connect(db_uri.clone()).await.unwrap();
+				let db = match Database::connect(db_uri.clone()).await {
+					Ok(v) => v,
+					Err(e) => {
+						error!(target: "launcher", "Could not connect to db: {:?}", e);
+						return;
+					}
+				};
 				info!(target: "launcher", "Connected to '{}'", db_uri);
 
 				let mut jobs = vec![];
@@ -142,7 +154,11 @@ fn main() {
 					);
 				}
 
-				for job in jobs { job.await.unwrap() }
+				for (i, job) in jobs.into_iter().enumerate() {
+					if let Err(e) = job.await {
+						error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
+					}
+				}
 
 				info!(target: "launcher", "Stopping background worker");
 			})
@@ -178,8 +194,12 @@ fn main() {
 
 		info!(target: "launcher", "Stopping native GUI");
 
-		run_tx.send(false).unwrap();
+		if let Err(e) = run_tx.send(false) {
+			error!(target: "launcher", "Error signaling end to workers: {:?}", e);
+		}
 	}
 
-	worker.join().unwrap();
+	if let Err(e) = worker.join() {
+		error!(target: "launcher", "Error joining background thread : {:?}", e);
+	}
 }

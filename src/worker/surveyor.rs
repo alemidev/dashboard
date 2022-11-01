@@ -32,8 +32,20 @@ pub async fn surveyor_loop(
 
 		if Utc::now().timestamp() - last_fetch > cache_time {
 			// TODO do both concurrently
-			sources = entities::sources::Entity::find().all(&db).await.unwrap();
-			metrics = Arc::new(entities::metrics::Entity::find().all(&db).await.unwrap());
+			match entities::sources::Entity::find().all(&db).await {
+				Ok(srcs) => sources = srcs,
+				Err(e) => {
+					error!(target: "surveyor", "Could not fetch sources: {:?}", e);
+					continue;
+				}
+			}
+			match entities::metrics::Entity::find().all(&db).await {
+				Ok(mtrcs) => metrics = Arc::new(mtrcs),
+				Err(e) => {
+					error!(target: "surveyor", "Could not fetch metrics: {:?}", e);
+					continue;
+				}
+			}
 			info!(target: "surveyor", "Reloaded sources and metrics");
 			last_fetch = Utc::now().timestamp();
 		}

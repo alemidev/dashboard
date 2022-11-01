@@ -123,7 +123,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 													// 	metrics.len() as i32,
 													// ) {
 													// 	Ok(verified_metric) => {
-													// 		store.put_values(verified_metric.id, &data).unwrap();
+													// 		store.put_values(verified_metric.id, &data).unwrap ();
 													// 		*verified_metric.data.write().expect("Values RwLock poisoned") = data;
 													// 		to_insert.push(verified_metric);
 													// 	}

@@ -1,7 +1,7 @@
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order};
+use sea_orm::{TransactionTrait, DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order};
 use tokio::sync::{watch, mpsc};
-use tracing::info;
+use tracing::{info, error};
 use std::collections::VecDeque;
 
 use crate::data::{entities, FetchError};
@@ -110,11 +110,20 @@ impl AppState {
 	pub async fn fetch(&mut self, db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
 		// TODO parallelize all this stuff
 		self.panels = entities::panels::Entity::find().all(db).await?;
-		self.tx.panels.send(self.panels.clone()).unwrap();
+		if let Err(e) = self.tx.panels.send(self.panels.clone()) { 
+			error!(target: "worker", "Could not send panels update: {:?}", e);
+		}
+
 		self.sources = entities::sources::Entity::find().all(db).await?;
-		self.tx.sources.send(self.sources.clone()).unwrap();
+		if let Err(e) = self.tx.sources.send(self.sources.clone()) {
+			error!(target: "worker", "Could not send sources update: {:?}", e);
+		}
+
 		self.metrics = entities::metrics::Entity::find().all(db).await?;
-		self.tx.metrics.send(self.metrics.clone()).unwrap();
+		if let Err(e) = self.tx.metrics.send(self.metrics.clone()) {
+			error!(target: "worker", "Could not send metrics update: {:?}", e);
+		}
+
 		info!(target: "worker", "Updated panels, sources and metrics");
 		self.last_refresh = chrono::Utc::now().timestamp();
 		Ok(())
@@ -137,26 +146,37 @@ impl AppState {
 							match op {
 								BackgroundAction::UpdateAllPanels { panels } => {
 									// TODO this is kinda rough, can it be done better?
-									entities::panels::Entity::delete_many().exec(&db).await.unwrap();
-									entities::panels::Entity::insert_many(
-										panels.iter().map(|v| entities::panels::ActiveModel{
-											id: Set(v.id),
-											name: Set(v.name.clone()),
-											view_scroll: Set(v.view_scroll),
-											view_size: Set(v.view_size),
-											timeserie: Set(v.timeserie),
-											height: Set(v.height),
-											limit_view: Set(v.limit_view),
-											position: Set(v.position),
-											reduce_view: Set(v.reduce_view),
-											view_chunks: Set(v.view_chunks),
-											shift_view: Set(v.shift_view),
-											view_offset: Set(v.view_offset),
-											average_view: Set(v.average_view),
-										}).collect::<Vec<entities::panels::ActiveModel>>()
-									).exec(&db).await.unwrap();
-									self.tx.panels.send(panels.clone()).unwrap();
-									self.panels = panels;
+									let pnls = panels.clone();
+									if let Err(e) = db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+										Box::pin(async move {
+											entities::panels::Entity::delete_many().exec(txn).await?;
+											entities::panels::Entity::insert_many(
+												pnls.iter().map(|v| entities::panels::ActiveModel{
+													id: Set(v.id),
+													name: Set(v.name.clone()),
+													view_scroll: Set(v.view_scroll),
+													view_size: Set(v.view_size),
+													timeserie: Set(v.timeserie),
+													height: Set(v.height),
+													limit_view: Set(v.limit_view),
+													position: Set(v.position),
+													reduce_view: Set(v.reduce_view),
+													view_chunks: Set(v.view_chunks),
+													shift_view: Set(v.shift_view),
+													view_offset: Set(v.view_offset),
+													average_view: Set(v.average_view),
+												}).collect::<Vec<entities::panels::ActiveModel>>()
+											).exec(txn).await?;
+											Ok(())
+										})
+									}).await {
+										error!(target: "worker", "Could not update panels on database: {:?}", e);
+									} else {
+										if let Err(e) = self.tx.panels.send(panels.clone()) {
+											error!(target: "worker", "Could not send panels update: {:?}", e);
+										}
+										self.panels = panels;
+									}
 								},
 								// _ => todo!(),
 							}
@@ -166,9 +186,11 @@ impl AppState {
 				},
 				_ = self.flush.recv() => {
 					let now = Utc::now().timestamp();
-					self.fetch(&db).await.unwrap();
+					if let Err(e) = self.fetch(&db).await {
+						error!(target: "worker", "Could not fetch from db: {:?}", e);
+					}
 					let new_width = *self.width.borrow() * 60; // TODO it's in minutes somewhere...
-					self.points = entities::points::Entity::find()
+					self.points = match entities::points::Entity::find()
 						.filter(
 							Condition::all()
 								.add(entities::points::Column::X.gte((now - new_width) as f64))
@@ -176,12 +198,24 @@ impl AppState {
 						)
 						.order_by(entities::points::Column::X, Order::Asc)
 						.all(&db)
-						.await.unwrap().into();
-					self.tx.points.send(self.points.clone().into()).unwrap();
+						.await {
+							Ok(p) => p.into(),
+							Err(e) => {
+								error!(target: "worker", "Could not fetch new points: {:?}", e);
+								continue;
+							}
+						};
+					if let Err(e) = self.tx.points.send(self.points.clone().into()) {
+						error!(target: "worker", "Could not send new points: {:?}", e);
+					}
 					last = Utc::now().timestamp();
 					info!(target: "worker", "Reloaded points");
 				},
-				_ = sleep(self.cache_age - (now - self.last_refresh)) => self.fetch(&db).await.unwrap(),
+				_ = sleep(self.cache_age - (now - self.last_refresh)) => {
+					if let Err(e) = self.fetch(&db).await {
+						error!(target: "worker", "Could not fetch from db: {:?}", e);
+					}
+				},
 				_ = sleep(self.interval - (now - self.last_check)) => {
 					let mut changes = false;
 					let now = Utc::now().timestamp();
@@ -189,7 +223,7 @@ impl AppState {
 	
 					// fetch previous points
 					if new_width != width {
-						let mut previous_points = entities::points::Entity::find()
+						let mut previous_points = match entities::points::Entity::find()
 							.filter(
 								Condition::all()
 									.add(entities::points::Column::X.gte(now - new_width))
@@ -197,8 +231,16 @@ impl AppState {
 							)
 							.order_by(entities::points::Column::X, Order::Asc)
 							.all(&db)
-							.await.unwrap();
-						info!(target: "worker", "Fetched {} previous points", previous_points.len());
+							.await {
+							Ok(p) => p,
+							Err(e) => {
+								error!(target: "worker", "Could not fetch previous points: {:?}", e);
+								continue;
+							}
+						};
+						if previous_points.len() > 0 {
+							info!(target: "worker", "Fetched {} previous points", previous_points.len());
+						}
 						previous_points.reverse(); // TODO wasteful!
 						for p in previous_points {
 							self.points.push_front(p);
@@ -207,7 +249,7 @@ impl AppState {
 					}
 	
 					// fetch new points
-					let new_points = entities::points::Entity::find()
+					let new_points = match entities::points::Entity::find()
 						.filter(
 							Condition::all()
 								.add(entities::points::Column::X.gte(last as f64))
@@ -215,8 +257,16 @@ impl AppState {
 						)
 						.order_by(entities::points::Column::X, Order::Asc)
 						.all(&db)
-						.await.unwrap();
-					info!(target: "worker", "Fetched {} new points", new_points.len());
+						.await {
+						Ok(p) => p,
+						Err(e) => {
+							error!(target: "worker", "Could not fetch new points: {:?}", e);
+							continue;
+						}
+					};
+					if new_points.len() > 0 {
+						info!(target: "worker", "Fetched {} new points", new_points.len());
+					}
 	
 					for p in new_points {
 						self.points.push_back(p);
@@ -237,7 +287,9 @@ impl AppState {
 					width = new_width;
 					self.last_check = now;
 					if changes {
-						self.tx.points.send(self.points.clone().into()).unwrap();
+						if let Err(e) = self.tx.points.send(self.points.clone().into()) {
+							error!(target: "worker", "Could not send changes to main thread: {:?}", e);
+						}
 					}
 				},
 			};
