@@ -15,7 +15,7 @@ use sea_orm::Database;
 
 use worker::visualizer::AppState;
 use worker::surveyor_loop;
-use util::InternalLogger;
+use util::{InternalLogger, InternalLoggerLayer};
 use gui::{
 	// util::InternalLogger,
 	App
@@ -49,8 +49,27 @@ struct CliArgs {
 	log_size: u64,
 }
 
+
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
+fn setup_tracing(layer: InternalLoggerLayer) {
+	tracing_subscriber::registry()
+		.with(LevelFilter::INFO)
+		.with(filter_fn(|x| x.target() != "sqlx::query"))
+		.with(tracing_subscriber::fmt::Layer::new())
+		.with(layer)
+		.init();
+}
+
+// When compiling for web:
+#[cfg(target_arch = "wasm32")]
+fn setup_tracing(_layer: InternalLoggerLayer) {
+	// Make sure panics are logged using `console.error`.
+	console_error_panic_hook::set_once();
+	// Redirect tracing to console.log and friends:
+	tracing_wasm::set_as_global_default();
+}
+
 fn main() {
 	let args = CliArgs::parse();
 
@@ -63,12 +82,7 @@ fn main() {
 	let logger = InternalLogger::new(args.log_size as usize);
 	let logger_view = logger.view();
 
-	tracing_subscriber::registry()
-		.with(LevelFilter::INFO)
-		.with(filter_fn(|x| x.target() != "sqlx::query"))
-		.with(tracing_subscriber::fmt::Layer::new())
-		.with(logger.layer())
-		.init();
+	setup_tracing(logger.layer());
 
 	let state = AppState::new(
 		width_rx,

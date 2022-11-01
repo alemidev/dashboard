@@ -5,7 +5,7 @@ pub mod metric;
 mod scaffold;
 
 use chrono::Utc;
-use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
+use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel, Window};
 use tokio::sync::watch;
 
 use crate::{data::entities, worker::visualizer::AppStateView};
@@ -35,6 +35,7 @@ pub struct App {
 	edit: bool,
 	sidebar: bool,
 	padding: bool,
+	// windows: Vec<Window<'open>>,
 }
 
 impl App {
@@ -56,6 +57,7 @@ impl App {
 			edit: false,
 			sidebar: true,
 			padding: false,
+			// windows: vec![],
 		}
 	}
 
@@ -79,6 +81,8 @@ impl eframe::App for App {
 		TopBottomPanel::bottom("footer").show(ctx, |ui| {
 			footer(ctx, ui, self.logger_view.clone(), self.db_path.clone(), self.view.points.borrow().len());
 		});
+
+		let w = Window::new("a");
 
 		// if let Some(index) = self.deleting_metric {
 		// 	Window::new(format!("Delete Metric #{}?", index))
