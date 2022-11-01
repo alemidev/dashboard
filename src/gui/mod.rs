@@ -4,10 +4,11 @@ pub mod metric;
 
 mod scaffold;
 
+use chrono::Utc;
 use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 use tokio::sync::watch;
 
-use crate::data::entities;
+use crate::{data::entities, worker::visualizer::AppStateView};
 use panel::main_content;
 use scaffold::{
 	// confirmation_popup_delete_metric, confirmation_popup_delete_source, footer,
@@ -15,14 +16,17 @@ use scaffold::{
 };
 use source::source_panel;
 
-pub struct App {
-	panels_rx: watch::Receiver<Vec<entities::panels::Model>>,
-	panels: Vec<entities::panels::Model>,
-	view_tx: watch::Sender<i64>,
+use self::scaffold::footer;
 
-	sources: watch::Receiver<Vec<entities::sources::Model>>,
-	metrics: watch::Receiver<Vec<entities::metrics::Model>>,
-	points: watch::Receiver<Vec<entities::points::Model>>,
+pub struct App {
+	view: AppStateView,
+	db_path: String,
+	interval: i64,
+	last_redraw: i64,
+
+	panels: Vec<entities::panels::Model>,
+	width_tx: watch::Sender<i64>,
+	logger_view: watch::Receiver<Vec<String>>,
 
 	buffer_panel: entities::panels::Model,
 	buffer_source: entities::sources::Model,
@@ -36,23 +40,33 @@ pub struct App {
 impl App {
 	pub fn new(
 		_cc: &eframe::CreationContext,
-		panels_rx: watch::Receiver<Vec<entities::panels::Model>>,
-		sources: watch::Receiver<Vec<entities::sources::Model>>,
-		metrics: watch::Receiver<Vec<entities::metrics::Model>>,
-		points: watch::Receiver<Vec<entities::points::Model>>,
-		view_tx: watch::Sender<i64>,
+		db_path: String,
+		interval: i64,
+		view: AppStateView,
+		width_tx: watch::Sender<i64>,
+		logger_view: watch::Receiver<Vec<String>>,
 	) -> Self {
-		let panels = panels_rx.borrow().clone();
+		let panels = view.panels.borrow().clone();
 		Self {
-			panels_rx, panels, view_tx,
-			sources, metrics, points,
+			db_path, interval, panels, width_tx, view, logger_view,
 			buffer_panel: entities::panels::Model::default(),
 			buffer_source: entities::sources::Model::default(),
 			buffer_metric: entities::metrics::Model::default(),
+			last_redraw: 0,
 			edit: false,
 			sidebar: true,
 			padding: false,
 		}
+	}
+
+	pub fn save_all_panels(&self) {
+		self.view.op.blocking_send(
+			crate::worker::visualizer::BackgroundAction::UpdateAllPanels { panels: self.panels.clone() }
+		).unwrap();
+	}
+
+	pub fn refresh_data(&self) {
+		self.view.flush.blocking_send(()).unwrap();
 	}
 }
 
@@ -62,8 +76,8 @@ impl eframe::App for App {
 			header(self, ui, frame);
 		});
 
-		TopBottomPanel::bottom("footer").show(ctx, |_ui| {
-			// footer(self.data.clone(), ctx, ui);
+		TopBottomPanel::bottom("footer").show(ctx, |ui| {
+			footer(ctx, ui, self.logger_view.clone(), self.db_path.clone(), self.view.points.borrow().len());
 		});
 
 		// if let Some(index) = self.deleting_metric {
@@ -73,6 +87,10 @@ impl eframe::App for App {
 		// if let Some(index) = self.deleting_source {
 		// 	Window::new(format!("Delete Source #{}?", index))
 		// 		.show(ctx, |ui| confirmation_popup_delete_source(self, ui, index));
+		// }
+
+		// for window in self.windows {
+
 		// }
 
 		if self.sidebar {
@@ -87,7 +105,12 @@ impl eframe::App for App {
 		});
 
 		if let Some(viewsize) = self.panels.iter().map(|p| p.view_size).max() {
-			self.view_tx.send(viewsize as i64).unwrap();
+			self.width_tx.send(viewsize as i64).unwrap();
+		}
+
+		if Utc::now().timestamp() > self.last_redraw + self.interval {
+			ctx.request_repaint();
+			self.last_redraw = Utc::now().timestamp();
 		}
 	}
 }

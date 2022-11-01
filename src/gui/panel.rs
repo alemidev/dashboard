@@ -1,6 +1,6 @@
 use chrono::{Local, Utc};
 use eframe::{egui::{
-	plot::{Corner, GridMark, Legend, Line, Plot, PlotPoints, PlotPoint},
+	plot::{Corner, GridMark, Legend, Line, Plot},
 	Ui, ScrollArea, collapsing_header::CollapsingState, Context, Layout, Slider, DragValue,
 }, emath::Vec2};
 
@@ -14,7 +14,7 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 	ScrollArea::vertical().show(ui, |ui| {
 		let panels = &mut app.panels;
 		let _panels_count = panels.len();
-		let metrics = app.metrics.borrow();
+		let metrics = app.view.metrics.borrow();
 		for (index, panel) in panels.iter_mut().enumerate() {
 			if index > 0 {
 				ui.separator(); // only show this if there is at least one panel
@@ -41,7 +41,7 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 				// ui.separator();
 				panel_title_ui(ui, panel, app.edit);
 			})
-			.body(|ui| panel_body_ui(ui, panel, &metrics, &app.points.borrow()));
+			.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow()));
 		}
 	});
 }

@@ -1,9 +1,10 @@
 use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use eframe::egui::{Color32, plot::PlotPoint};
-use std::{sync::Arc, error::Error, path::PathBuf};
+use tokio::sync::{watch, mpsc};
+use std::{error::Error, path::PathBuf, collections::VecDeque};
 use tracing_subscriber::Layer;
 
-use super::data::{ApplicationState, entities};
+use super::data::entities;
 
 // if you're handling more than terabytes of data, it's the future and you ought to update this code!
 const _PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
@@ -51,7 +52,8 @@ pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<
 	))
 }
 
-pub fn _human_size(size: u64) -> String {
+#[allow(dead_code)]
+pub fn human_size(size: u64) -> String {
 	let mut buf: f64 = size as f64;
 	let mut prefix: usize = 0;
 	while buf > 1024.0 && prefix < _PREFIXES.len() - 1 {
@@ -101,16 +103,62 @@ pub fn repack_color(c: Color32) -> u32 {
 }
 
 pub struct InternalLogger {
-	_state: Arc<ApplicationState>,
+	size: usize,
+	view_tx: watch::Sender<Vec<String>>,
+	view_rx: watch::Receiver<Vec<String>>,
+	msg_tx : mpsc::UnboundedSender<String>,
+	msg_rx : mpsc::UnboundedReceiver<String>,
 }
 
 impl InternalLogger {
-	pub fn _new(state: Arc<ApplicationState>) -> Self {
-		InternalLogger { _state: state }
+	pub fn new(size: usize) -> Self {
+		let (view_tx, view_rx) = watch::channel(vec![]);
+		let (msg_tx, msg_rx) = mpsc::unbounded_channel();
+		InternalLogger { size, view_tx, view_rx, msg_tx, msg_rx }
+	}
+
+	pub fn view(&self) -> watch::Receiver<Vec<String>> {
+		self.view_rx.clone()
+	}
+
+	pub fn layer(&self) -> InternalLoggerLayer {
+		InternalLoggerLayer::new(self.msg_tx.clone())
+	}
+
+	pub async fn worker(mut self, run: watch::Receiver<bool>) {
+		let mut messages = VecDeque::new();
+		while *run.borrow() {
+			tokio::select!{
+				msg = self.msg_rx.recv() => {
+					match msg {
+						Some(msg) => {
+							messages.push_back(msg);
+							while messages.len() > self.size {
+								messages.pop_front();
+							}
+							self.view_tx.send(messages.clone().into()).unwrap();
+						},
+						None => break,
+					}
+				},
+				_ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {},
+				// unblock so it checks again run and exits cleanly
+			}
+		}
 	}
 }
 
-impl<S> Layer<S> for InternalLogger
+pub struct InternalLoggerLayer {
+	msg_tx:  mpsc::UnboundedSender<String>,
+}
+
+impl InternalLoggerLayer {
+	pub fn new(msg_tx: mpsc::UnboundedSender<String>) -> Self {
+		InternalLoggerLayer { msg_tx }
+	}
+}
+
+impl<S> Layer<S> for InternalLoggerLayer
 where
 	S: tracing::Subscriber,
 {
@@ -123,18 +171,15 @@ where
 			msg: "".to_string(),
 		};
 		event.record(&mut msg_visitor);
-		let _out = format!(
+		let out = format!(
 			"{} [{}] {}: {}",
 			Local::now().format("%H:%M:%S"),
 			event.metadata().level(),
 			event.metadata().target(),
 			msg_visitor.msg
 		);
-		// self.state
-		// 	.diagnostics
-		// 	.write()
-		// 	.expect("Diagnostics RwLock poisoned")
-		// 	.push(out);
+
+		self.msg_tx.send(out).unwrap_or_default();
 	}
 }
 

@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use eframe::{Frame, egui::{collapsing_header::CollapsingState, Context, Ui, Layout, ScrollArea, global_dark_light_mode_switch}, emath::Align};
+use tokio::sync::watch;
 
-use crate::data::ApplicationState;
 use crate::gui::App;
 
 use super::panel::panel_edit_inline_ui;
@@ -68,16 +66,19 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 		ui.checkbox(&mut app.sidebar, "sources");
 		ui.separator();
 		if ui.button("reset").clicked() {
-			app.panels = app.panels_rx.borrow().clone();
+			app.panels = app.view.panels.borrow().clone();
+		}
+		ui.separator();
+		if ui.button("save").clicked() {
+			app.save_all_panels();
+		}
+		ui.separator();
+		if ui.button("refresh").clicked() {
+			app.refresh_data();
 		}
 		ui.separator();
 		ui.checkbox(&mut app.edit, "edit");
 		if app.edit {
-			if ui.button("save").clicked() {
-				// native_save(app.data.clone());
-				app.edit = false;
-			}
-			ui.separator();
 			ui.label("+ panel");
 			panel_edit_inline_ui(ui, &mut app.buffer_panel);
 			if ui.button("add").clicked() {
@@ -97,7 +98,7 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 	});
 }
 
-pub fn _footer(_data: Arc<ApplicationState>, ctx: &Context, ui: &mut Ui) {
+pub fn footer(ctx: &Context, ui: &mut Ui, diagnostics: watch::Receiver<Vec<String>>, db_path: String, records: usize) {
 	CollapsingState::load_with_default_open(
 		ctx,
 		ui.make_persistent_id("footer-logs"),
@@ -106,8 +107,9 @@ pub fn _footer(_data: Arc<ApplicationState>, ctx: &Context, ui: &mut Ui) {
 	.show_header(ui, |ui| {
 		ui.horizontal(|ui| {
 			ui.separator();
-			// ui.label(data.file_path.to_str().unwrap()); // TODO maybe calculate it just once?
+			ui.label(db_path); // TODO maybe calculate it just once?
 			ui.separator();
+			ui.label(format!("{} records loaded", records)); // TODO put thousands separator
 			// ui.label(human_size(
 			// 	*data
 			// 		.file_size
@@ -131,14 +133,10 @@ pub fn _footer(_data: Arc<ApplicationState>, ctx: &Context, ui: &mut Ui) {
 	.body(|ui| {
 		ui.set_height(200.0);
 		ScrollArea::vertical().show(ui, |ui| {
-			// let msgs = data
-			// 	.diagnostics
-			// 	.read()
-			// 	.expect("Diagnostics RwLock poisoned");
 			ui.separator();
-			//for msg in msgs.iter() {
-			//	ui.label(msg);
-			//}
+			for msg in diagnostics.borrow().iter() {
+				ui.label(msg);
+			}
 			ui.separator();
 		});
 	});
