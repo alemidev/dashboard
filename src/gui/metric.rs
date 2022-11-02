@@ -36,8 +36,7 @@ pub fn _metric_display_ui(ui: &mut Ui, metric: &entities::metrics::Model, _width
 pub fn metric_edit_ui(ui: &mut Ui, metric: &entities::metrics::Model, panels: Option<&Vec<entities::panels::Model>>, width: f32) {
 	let text_width = width - 195.0;
 	let mut name = metric.name.clone();
-	let def_str = "".into();
-	let mut query_x = metric.query_x.as_ref().unwrap_or(&def_str).clone();
+	let mut query_x = metric.query_x.clone();
 	let mut query_y = metric.query_y.clone();
 	let mut panel_id = 0;
 	ui.horizontal(|ui| {

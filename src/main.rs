@@ -175,9 +175,9 @@ fn main() {
 			native_options,
 			Box::new(
 				move |cc| {
-					ctx_tx.send(Some(cc.egui_ctx.clone())).unwrap_or_else(|_| {
+					if let Err(_e) = ctx_tx.send(Some(cc.egui_ctx.clone())) {
 						error!(target: "launcher", "Could not share reference to egui context (won't be able to periodically refresh window)");
-					});
+					};
 					Box::new(
 						App::new(
 							cc,

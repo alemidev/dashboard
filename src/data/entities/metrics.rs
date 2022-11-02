@@ -13,7 +13,7 @@ pub struct Model {
 	pub id: i64,
 	pub name: String,
 	pub source_id: i64,
-	pub query_x: Option<String>,
+	pub query_x: String,
 	pub query_y: String,
 	pub panel_id: i64,
 	pub color: i32,
@@ -29,14 +29,8 @@ impl ActiveModelBehavior for ActiveModel {}
 impl Model {
 	pub fn extract(&self, value: &serde_json::Value) -> Result<PlotPoint, FetchError> {
 		let x: f64;
-		let fallback_query = "".into();
-		let q_x = self.query_x.as_ref().unwrap_or(&fallback_query);
-		// TODO because of bad design, empty queries are
-		// empty strings in my db. Rather than converting
-		// them right away, I'm putting this jank fix:
-		// checking len
-		if q_x.len() > 0 {
-			x = jql::walker(value, q_x.as_str())?
+		if self.query_x.len() > 0 {
+			x = jql::walker(value, self.query_x.as_str())?
 				.as_f64()
 				.ok_or(FetchError::JQLError("X query is null".to_string()))?; // TODO what if it's given to us as a string?
 		} else {
@@ -55,7 +49,7 @@ impl Default for Model {
 			id: 0,
 			name: "".into(),
 			source_id: 0,
-			query_x: None,
+			query_x: "".into(),
 			query_y: "".into(),
 			panel_id: 0,
 			color: 0,

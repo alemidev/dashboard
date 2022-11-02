@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{TransactionTrait, DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order};
+use sea_orm::{TransactionTrait, DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order, ActiveModelTrait, ActiveValue::NotSet};
 use tokio::sync::{watch, mpsc};
 use tracing::{info, error};
 use std::collections::VecDeque;
@@ -17,7 +17,7 @@ pub struct AppStateView {
 }
 
 impl AppStateView {
-	pub async fn _request_flush(&self) -> bool {
+	pub async fn request_flush(&self) -> bool {
 		match self.flush.send(()).await {
 			Ok(_) => true,
 			Err(_) => false,
@@ -109,17 +109,23 @@ impl AppState {
 
 	pub async fn fetch(&mut self, db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
 		// TODO parallelize all this stuff
-		self.panels = entities::panels::Entity::find().all(db).await?;
+		self.panels = entities::panels::Entity::find()
+			.order_by(entities::panels::Column::Position, Order::Asc)
+			.all(db).await?;
 		if let Err(e) = self.tx.panels.send(self.panels.clone()) { 
 			error!(target: "worker", "Could not send panels update: {:?}", e);
 		}
 
-		self.sources = entities::sources::Entity::find().all(db).await?;
+		self.sources = entities::sources::Entity::find()
+			.order_by(entities::sources::Column::Position, Order::Asc)
+			.all(db).await?;
 		if let Err(e) = self.tx.sources.send(self.sources.clone()) {
 			error!(target: "worker", "Could not send sources update: {:?}", e);
 		}
 
-		self.metrics = entities::metrics::Entity::find().all(db).await?;
+		self.metrics = entities::metrics::Entity::find()
+			.order_by(entities::metrics::Column::Position, Order::Asc)
+			.all(db).await?;
 		if let Err(e) = self.tx.metrics.send(self.metrics.clone()) {
 			error!(target: "worker", "Could not send metrics update: {:?}", e);
 		}
@@ -176,6 +182,30 @@ impl AppState {
 											error!(target: "worker", "Could not send panels update: {:?}", e);
 										}
 										self.panels = panels;
+									}
+								},
+								BackgroundAction::UpdatePanel { panel } => {
+									let op = if panel.id == NotSet { panel.insert(&db) } else { panel.update(&db) };
+									if let Err(e) = op.await {
+										error!(target: "worker", "Could not update panel: {:?}", e);
+									} else {
+										self.view.request_flush().await;
+									}
+								},
+								BackgroundAction::UpdateSource { source } => {
+									let op = if source.id == NotSet { source.insert(&db) } else { source.update(&db) };
+									if let Err(e) = op.await {
+										error!(target: "worker", "Could not update source: {:?}", e);
+									} else {
+										self.view.request_flush().await;
+									}
+								},
+								BackgroundAction::UpdateMetric { metric } => {
+									let op = if metric.id == NotSet { metric.insert(&db) } else { metric.update(&db) };
+									if let Err(e) = op.await {
+										error!(target: "worker", "Could not update metric: {:?}", e);
+									} else {
+										self.view.request_flush().await;
 									}
 								},
 								// _ => todo!(),
@@ -300,7 +330,10 @@ impl AppState {
 #[derive(Debug)]
 pub enum BackgroundAction {
 	UpdateAllPanels { panels: Vec<entities::panels::Model> },
-	// UpdatePanel     { panel : entities::panels::ActiveModel },
-	// UpdateSource    { source: entities::sources::ActiveModel },
-	// UpdateMetric    { metric: entities::metrics::ActiveModel },
+	UpdatePanel     { panel : entities::panels::ActiveModel },
+	UpdateSource    { source: entities::sources::ActiveModel },
+	UpdateMetric    { metric: entities::metrics::ActiveModel },
+	// InsertPanel     { panel : entities::panels::ActiveModel },
+	// InsertSource    { source: entities::sources::ActiveModel },
+	// InsertMetric    { metric: entities::metrics::ActiveModel },
 }

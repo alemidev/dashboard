@@ -9,7 +9,7 @@ use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel, Window};
 use tokio::sync::watch;
 use tracing::error;
 
-use crate::{data::entities, worker::visualizer::AppStateView};
+use crate::{data::entities, worker::{visualizer::AppStateView, BackgroundAction}};
 use panel::main_content;
 use scaffold::{
 	// confirmation_popup_delete_metric, confirmation_popup_delete_source, footer,
@@ -17,7 +17,7 @@ use scaffold::{
 };
 use source::source_panel;
 
-use self::scaffold::footer;
+use self::scaffold::{footer, popup_edit_ui, EditingModel};
 
 pub struct App {
 	view: AppStateView,
@@ -29,11 +29,12 @@ pub struct App {
 	width_tx: watch::Sender<i64>,
 	logger_view: watch::Receiver<Vec<String>>,
 
-	buffer_panel: entities::panels::Model,
+	// buffer_panel: entities::panels::Model,
 	buffer_source: entities::sources::Model,
-	buffer_metric: entities::metrics::Model,
+	// buffer_metric: entities::metrics::Model,
 
 	edit: bool,
+	editing: Vec<EditingModel>,
 	sidebar: bool,
 	padding: bool,
 	// windows: Vec<Window<'open>>,
@@ -51,11 +52,10 @@ impl App {
 		let panels = view.panels.borrow().clone();
 		Self {
 			db_path, interval, panels, width_tx, view, logger_view,
-			buffer_panel: entities::panels::Model::default(),
 			buffer_source: entities::sources::Model::default(),
-			buffer_metric: entities::metrics::Model::default(),
 			last_redraw: 0,
 			edit: false,
+			editing: vec![],
 			sidebar: true,
 			padding: false,
 			// windows: vec![],
@@ -75,6 +75,12 @@ impl App {
 			error!(target: "app", "Could not request flush: {:?}", e);
 		}
 	}
+
+	pub fn op(&self, op: BackgroundAction) {
+		if let Err(e) = self.view.op.blocking_send(op) {
+			error!(target: "app", "Could not send operation: {:?}", e);
+		}
+	}
 }
 
 impl eframe::App for App {
@@ -87,20 +93,9 @@ impl eframe::App for App {
 			footer(ctx, ui, self.logger_view.clone(), self.db_path.clone(), self.view.points.borrow().len());
 		});
 
-		let _w = Window::new("a");
-
-		// if let Some(index) = self.deleting_metric {
-		// 	Window::new(format!("Delete Metric #{}?", index))
-		// 		.show(ctx, |ui| confirmation_popup_delete_metric(self, ui, index));
-		// }
-		// if let Some(index) = self.deleting_source {
-		// 	Window::new(format!("Delete Source #{}?", index))
-		// 		.show(ctx, |ui| confirmation_popup_delete_source(self, ui, index));
-		// }
-
-		// for window in self.windows {
-
-		// }
+		for m in self.editing.iter_mut() {
+			Window::new(m.id_repr()).show(ctx, |ui| popup_edit_ui(ui, m));
+		}
 
 		if self.sidebar {
 			SidePanel::left("sources-bar")
@@ -113,7 +108,7 @@ impl eframe::App for App {
 			main_content(self, ctx, ui);
 		});
 
-		if let Some(viewsize) = self.panels.iter().map(|p| p.view_size).max() {
+		if let Some(viewsize) = self.panels.iter().map(|p| p.view_size + p.view_offset).max() {
 			if let Err(e) = self.width_tx.send(viewsize as i64) {
 				error!(target: "app", "Could not update fetch size : {:?}", e);
 			}
@@ -123,5 +118,13 @@ impl eframe::App for App {
 			ctx.request_repaint();
 			self.last_redraw = Utc::now().timestamp();
 		}
+
+		for m in self.editing.iter() {
+			if m.should_fetch() {
+				self.op(m.to_msg());
+			}
+		}
+
+		self.editing.retain(|v| v.modifying());
 	}
 }

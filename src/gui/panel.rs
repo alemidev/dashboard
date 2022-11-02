@@ -46,7 +46,7 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 	});
 }
 
-pub fn panel_edit_inline_ui(_ui: &mut Ui, _panel: &entities::panels::Model) {
+pub fn _panel_edit_inline_ui(_ui: &mut Ui, _panel: &entities::panels::Model) {
 	// TextEdit::singleline(&mut panel.name)
 	// 	.hint_text("name")
 	// 	.desired_width(100.0)

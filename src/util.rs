@@ -13,9 +13,8 @@ const _PREFIXES: &'static [&'static str] = &["", "k", "M", "G", "T"];
 pub fn _serialize_values(values: &Vec<PlotPoint>, metric: &entities::metrics::Model, path: PathBuf) -> Result<(), Box<dyn Error>> {
 	let mut wtr = csv::Writer::from_writer(std::fs::File::create(path)?);
 	// DAMN!   VVVVV
-	let def_q_x = "".into();
 	let name = metric.name.as_str();
-	let q_x = metric.query_x.as_ref().unwrap_or(&def_q_x).as_str();
+	let q_x = metric.query_x.as_str();
 	let q_y = metric.query_y.as_str();
 	wtr.write_record(&[name, q_x, q_y])?;
 	// DAMN!   AAAAA
@@ -26,7 +25,7 @@ pub fn _serialize_values(values: &Vec<PlotPoint>, metric: &entities::metrics::Mo
 	Ok(())
 }
 
-pub fn deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<PlotPoint>), Box<dyn Error>> {
+pub fn _deserialize_values(path: PathBuf) -> Result<(String, String, String, Vec<PlotPoint>), Box<dyn Error>> {
 	let mut values = Vec::new();
 
 	let mut rdr = csv::Reader::from_reader(std::fs::File::open(path)?);

@@ -3,16 +3,14 @@ use eframe::{
 	emath::Align,
 };
 use rfd::FileDialog;
-use tracing::error;
 
-use crate::util::deserialize_values;
 use crate::gui::App;
 use crate::data::entities;
 
 use super::metric::metric_edit_ui;
 
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
-	let mut source_to_put_metric_on : Option<i64> = None;
+	let source_to_put_metric_on : Option<i64> = None;
 	let mut to_swap: Option<usize> = None;
 	let _to_insert: Vec<entities::metrics::Model> = Vec::new();
 	// let mut to_delete: Option<usize> = None;
@@ -48,8 +46,8 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 								ui.horizontal(|ui| {
 									source_edit_ui(ui, source, remaining_width - 34.0);
 									if ui.small_button("×").clicked() {
-										// app.deleting_metric = None;
-										// app.deleting_source = Some(i);
+										// TODO don't add duplicates
+										app.editing.push(source.clone().into());
 									}
 								});
 								let metrics = app
@@ -83,65 +81,12 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 												}
 											}
 											if ui.small_button("×").clicked() {
-												// app.deleting_source = None;
-												// app.deleting_metric = Some(j);
+												// TODO don't add duplicates
+												app.editing.push(metric.clone().into());
 											}
 										});
 									}
 								}
-								ui.horizontal(|ui| {
-									metric_edit_ui(
-										ui,
-										&mut app.buffer_metric,
-										None,
-										remaining_width - 53.0,
-									);
-									ui.add_space(2.0);
-									if ui.small_button("          +          ").clicked() {
-										source_to_put_metric_on = Some(source.id);
-									}
-									ui.add_space(1.0); // DAMN!
-									if ui.small_button("o").clicked() {
-										let path = FileDialog::new()
-											.add_filter("csv", &["csv"])
-											.pick_file();
-										if let Some(path) = path {
-											match deserialize_values(path) {
-												Ok((_name, _query_x, _query_y, _data)) => {
-													// let mut store = app
-													// 	.data
-													// 	.storage
-													// 	.lock()
-													// 	.expect("Storage Mutex poisoned");
-													// match store.new_metric(
-													// 	name.as_str(),
-													// 	source.id,
-													// 	query_x.as_str(),
-													// 	query_y.as_str(),
-													// 	-1,
-													// 	Color32::TRANSPARENT,
-													// 	metrics.len() as i32,
-													// ) {
-													// 	Ok(verified_metric) => {
-													// 		store.put_values(verified_metric.id, &data).unwrap ();
-													// 		*verified_metric.data.write().expect("Values RwLock poisoned") = data;
-													// 		to_insert.push(verified_metric);
-													// 	}
-													// 	Err(e) => {
-													// 		error!(target: "ui", "could not save metric into archive : {:?}", e);
-													// 	}
-													// }
-												}
-												Err(e) => {
-													error!(target: "ui", "Could not deserialize metric from file : {:?}", e);
-												}
-											}
-										}
-									}
-									if ui.small_button("×").clicked() {
-										app.buffer_metric = entities::metrics::Model::default();
-									}
-								})
 							});
 						});
 					});
