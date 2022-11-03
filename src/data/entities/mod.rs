@@ -2,7 +2,8 @@
 
 pub mod prelude;
 
-pub mod metrics;
 pub mod panels;
+pub mod panel_metric;
+pub mod metrics;
 pub mod points;
 pub mod sources;

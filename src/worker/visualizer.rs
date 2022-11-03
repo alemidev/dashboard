@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{TransactionTrait, DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order, ActiveModelTrait, ActiveValue::NotSet};
+use sea_orm::{TransactionTrait, DatabaseConnection, EntityTrait, Condition, ColumnTrait, QueryFilter, Set, QueryOrder, Order, ActiveModelTrait, ActiveValue::{NotSet, self}};
 use tokio::sync::{watch, mpsc};
 use tracing::{info, error};
 use std::collections::VecDeque;
@@ -8,12 +8,13 @@ use crate::data::{entities, FetchError};
 
 #[derive(Clone)]
 pub struct AppStateView {
-	pub panels:  watch::Receiver<Vec<entities::panels::Model>>,
-	pub sources: watch::Receiver<Vec<entities::sources::Model>>,
-	pub metrics: watch::Receiver<Vec<entities::metrics::Model>>,
-	pub points:  watch::Receiver<Vec<entities::points::Model>>,
-	pub flush:   mpsc::Sender<()>,
-	pub op:      mpsc::Sender<BackgroundAction>,
+	pub panels:       watch::Receiver<Vec<entities::panels::Model>>,
+	pub sources:      watch::Receiver<Vec<entities::sources::Model>>,
+	pub metrics:      watch::Receiver<Vec<entities::metrics::Model>>,
+	pub panel_metric: watch::Receiver<Vec<entities::panel_metric::Model>>,
+	pub points:       watch::Receiver<Vec<entities::points::Model>>,
+	pub flush:        mpsc::Sender<()>,
+	pub op:           mpsc::Sender<BackgroundAction>,
 }
 
 impl AppStateView {
@@ -26,18 +27,20 @@ impl AppStateView {
 }
 
 struct AppStateTransmitters {
-	panels:  watch::Sender<Vec<entities::panels::Model>>,
-	sources: watch::Sender<Vec<entities::sources::Model>>,
-	metrics: watch::Sender<Vec<entities::metrics::Model>>,
-	points:  watch::Sender<Vec<entities::points::Model>>,
+	panels:       watch::Sender<Vec<entities::panels::Model>>,
+	sources:      watch::Sender<Vec<entities::sources::Model>>,
+	metrics:      watch::Sender<Vec<entities::metrics::Model>>,
+	points:       watch::Sender<Vec<entities::points::Model>>,
+	panel_metric: watch::Sender<Vec<entities::panel_metric::Model>>,
 }
 
 pub struct AppState {
 	tx: AppStateTransmitters,
 
-	panels:  Vec<entities::panels::Model>,
-	sources: Vec<entities::sources::Model>,
-	metrics: Vec<entities::metrics::Model>,
+	panels:       Vec<entities::panels::Model>,
+	sources:      Vec<entities::sources::Model>,
+	metrics:      Vec<entities::metrics::Model>,
+	panel_metric: Vec<entities::panel_metric::Model>,
 	last_refresh: i64,
 
 	points:  VecDeque<entities::points::Model>,
@@ -70,6 +73,7 @@ impl AppState {
 		let (source_tx, source_rx) = watch::channel(vec![]);
 		let (metric_tx, metric_rx) = watch::channel(vec![]);
 		let (point_tx, point_rx) = watch::channel(vec![]);
+		let (panel_metric_tx, panel_metric_rx) = watch::channel(vec![]);
 		// let (view_tx, view_rx) = watch::channel(0);
 		let (flush_tx, flush_rx) = mpsc::channel(10);
 		let (op_tx, op_rx) = mpsc::channel(100);
@@ -78,6 +82,7 @@ impl AppState {
 			panels: vec![],
 			sources: vec![],
 			metrics: vec![],
+			panel_metric: vec![],
 			last_refresh: 0,
 			points: VecDeque::new(),
 			last_check: 0,
@@ -88,6 +93,7 @@ impl AppState {
 				sources: source_rx,
 				metrics: metric_rx,
 				points: point_rx,
+				panel_metric: panel_metric_rx,
 				flush: flush_tx,
 				op: op_tx,
 			},
@@ -96,6 +102,7 @@ impl AppState {
 				sources: source_tx,
 				metrics: metric_tx,
 				points: point_tx,
+				panel_metric: panel_metric_tx,
 			},
 			width,
 			interval,
@@ -128,6 +135,12 @@ impl AppState {
 			.all(db).await?;
 		if let Err(e) = self.tx.metrics.send(self.metrics.clone()) {
 			error!(target: "worker", "Could not send metrics update: {:?}", e);
+		}
+
+		self.panel_metric = entities::panel_metric::Entity::find()
+			.all(db).await?;
+		if let Err(e) = self.tx.panel_metric.send(self.panel_metric.clone()) {
+			error!(target: "worker", "Could not send panel-metric update: {:?}", e);
 		}
 
 		info!(target: "worker", "Updated panels, sources and metrics");
@@ -164,11 +177,9 @@ impl AppState {
 													view_size: Set(v.view_size),
 													timeserie: Set(v.timeserie),
 													height: Set(v.height),
-													limit_view: Set(v.limit_view),
 													position: Set(v.position),
 													reduce_view: Set(v.reduce_view),
 													view_chunks: Set(v.view_chunks),
-													shift_view: Set(v.shift_view),
 													view_offset: Set(v.view_offset),
 													average_view: Set(v.average_view),
 												}).collect::<Vec<entities::panels::ActiveModel>>()
@@ -184,12 +195,34 @@ impl AppState {
 										self.panels = panels;
 									}
 								},
-								BackgroundAction::UpdatePanel { panel } => {
+								BackgroundAction::UpdatePanel { panel, metrics } => {
+									let panel_id = match panel.id {
+										ActiveValue::Unchanged(pid) => Some(pid),
+										_ => None,
+									};
 									let op = if panel.id == NotSet { panel.insert(&db) } else { panel.update(&db) };
+									// TODO chained if is trashy
 									if let Err(e) = op.await {
 										error!(target: "worker", "Could not update panel: {:?}", e);
 									} else {
-										self.view.request_flush().await;
+										if let Some(panel_id) = panel_id {
+											if let Err(e) = db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+												Box::pin(async move {
+													entities::panel_metric::Entity::delete_many()
+														.filter(
+															Condition::all()
+																.add(entities::panel_metric::Column::PanelId.eq(panel_id))
+														)
+														.exec(txn).await?;
+													entities::panel_metric::Entity::insert_many(metrics).exec(txn).await?;
+													Ok(())
+												})
+											}).await {
+												error!(target: "worker", "Could not update panels on database: {:?}", e);
+											}
+										} else {
+											self.view.request_flush().await;
+										}
 									}
 								},
 								BackgroundAction::UpdateSource { source } => {
@@ -330,7 +363,7 @@ impl AppState {
 #[derive(Debug)]
 pub enum BackgroundAction {
 	UpdateAllPanels { panels: Vec<entities::panels::Model> },
-	UpdatePanel     { panel : entities::panels::ActiveModel },
+	UpdatePanel     { panel : entities::panels::ActiveModel, metrics: Vec<entities::panel_metric::ActiveModel> },
 	UpdateSource    { source: entities::sources::ActiveModel },
 	UpdateMetric    { metric: entities::metrics::ActiveModel },
 	// InsertPanel     { panel : entities::panels::ActiveModel },

@@ -4,3 +4,4 @@ pub use super::metrics::Entity as Metrics;
 pub use super::panels::Entity as Panels;
 pub use super::points::Entity as Points;
 pub use super::sources::Entity as Sources;
+pub use super::panel_metric::Entity as PanelMetric;

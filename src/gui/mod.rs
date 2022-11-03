@@ -17,7 +17,7 @@ use scaffold::{
 };
 use source::source_panel;
 
-use self::scaffold::{footer, popup_edit_ui, EditingModel};
+use self::scaffold::{footer, EditingModel, popup_edit_ui};
 
 pub struct App {
 	view: AppStateView,
@@ -94,7 +94,9 @@ impl eframe::App for App {
 		});
 
 		for m in self.editing.iter_mut() {
-			Window::new(m.id_repr()).show(ctx, |ui| popup_edit_ui(ui, m));
+			Window::new(m.id_repr())
+				.default_width(150.0)
+				.show(ctx, |ui| popup_edit_ui(ui, m, &self.view.sources.borrow(), &self.view.metrics.borrow()));
 		}
 
 		if self.sidebar {
@@ -121,7 +123,7 @@ impl eframe::App for App {
 
 		for m in self.editing.iter() {
 			if m.should_fetch() {
-				self.op(m.to_msg());
+				self.op(m.to_msg(self.view.clone())); // TODO cloning is super wasteful
 			}
 		}
 

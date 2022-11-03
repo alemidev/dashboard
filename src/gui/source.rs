@@ -16,6 +16,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	// let mut to_delete: Option<usize> = None;
 	let panels = &app.panels;
 	let panel_width = ui.available_width();
+	let mut orphaned_metrics = app.view.metrics.borrow().clone();
 	ScrollArea::vertical()
 		.max_width(panel_width)
 		.show(ui, |ui| {
@@ -29,16 +30,8 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 					ui.horizontal(|ui| {
 						ui.vertical(|ui| {
 							ui.add_space(10.0);
-							if ui.small_button("+").clicked() {
-								if i > 0 {
-									to_swap = Some(i); // TODO kinda jank but is there a better way?
-								}
-							}
-							if ui.small_button("−").clicked() {
-								if i < sources_count - 1 {
-									to_swap = Some(i + 1); // TODO kinda jank but is there a better way?
-								}
-							}
+							if ui.small_button("+").clicked() { }
+							if ui.small_button("−").clicked() { }
 						});
 						ui.vertical(|ui| { // actual sources list container
 							let remaining_width = ui.available_width();
@@ -56,6 +49,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 									.borrow();
 								for (_j, metric) in metrics.iter().enumerate() {
 									if metric.source_id == source.id {
+										orphaned_metrics.retain(|m| m.id != metric.id);
 										ui.horizontal(|ui| {
 											metric_edit_ui(
 												ui,
@@ -91,6 +85,55 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 						});
 					});
 				}
+				ui.horizontal(|ui| { // 1 more for uncategorized sources
+					ui.vertical(|ui| {
+						ui.add_space(10.0);
+						if ui.small_button("+").clicked() { }
+						if ui.small_button("−").clicked() { }
+					});
+					ui.vertical(|ui| { // actual sources list container
+						let remaining_width = ui.available_width();
+						ui.group(|ui| {
+							ui.horizontal(|ui| {
+								source_edit_ui(ui, &app.buffer_source, remaining_width - 34.0);
+								if ui.small_button("×").clicked() {
+									app.buffer_source = entities::sources::Model::default();
+								}
+							});
+							for metric in orphaned_metrics.iter() {
+								ui.horizontal(|ui| {
+									metric_edit_ui(
+										ui,
+										metric,
+										Some(&panels),
+										remaining_width - 53.0,
+									);
+									if ui.small_button("s").clicked() {
+										// let path = FileDialog::new()
+										// 	.add_filter("csv", &["csv"])
+										// 	.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
+										// 	.save_file();
+										// if let Some(_path) = path {
+										// 	// serialize_values(
+										// 	// 	&*metric
+										// 	// 		.data
+										// 	// 		.read()
+										// 	// 		.expect("Values RwLock poisoned"),
+										// 	// 	metric,
+										// 	// 	path,
+										// 	// )
+										// 	// .expect("Could not serialize data");
+										// }
+									}
+									if ui.small_button("×").clicked() {
+										// TODO don't add duplicates
+										app.editing.push(metric.clone().into());
+									}
+								});
+							}
+						});
+					});
+				});
 			}
 			if app.edit {
 				ui.separator();

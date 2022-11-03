@@ -8,6 +8,8 @@ use crate::util::{timestamp_to_str, unpack_color};
 use crate::gui::App;
 use crate::data::entities;
 
+use super::scaffold::EditingModel;
+
 pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 	let mut _to_swap: Option<usize> = None;
 	let mut _to_delete: Option<usize> = None;
@@ -39,9 +41,9 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 				// 	to_delete = Some(index); // TODO kinda jank but is there a better way?
 				// }
 				// ui.separator();
-				panel_title_ui(ui, panel, app.edit);
+				panel_title_ui(ui, panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
 			})
-			.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow()));
+			.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
 		}
 	});
 }
@@ -53,9 +55,22 @@ pub fn _panel_edit_inline_ui(_ui: &mut Ui, _panel: &entities::panels::Model) {
 	// 	.show(ui);
 }
 
-pub fn panel_title_ui(ui: &mut Ui, panel: &mut entities::panels::Model, _edit: bool) { // TODO make edit UI in separate func
+pub fn panel_title_ui(
+	ui: &mut Ui,
+	panel: &mut entities::panels::Model,
+	editing: &mut Vec<EditingModel>,
+	metrics: &Vec<entities::metrics::Model>,
+	panel_metric: &Vec<entities::panel_metric::Model>,
+) { // TODO make edit UI in separate func
 	ui.horizontal(|ui| {
 		ui.heading(panel.name.as_str());
+		ui.separator();
+		if ui.small_button("#").clicked() {
+			// TODO don't add duplicates
+			editing.push(
+				EditingModel::make_edit_panel(panel.clone(), metrics, panel_metric)
+			);
+		}
 		ui.separator();
 		ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
 		//ui.separator();
@@ -93,26 +108,29 @@ pub fn panel_title_ui(ui: &mut Ui, panel: &mut entities::panels::Model, _edit: b
 	});
 }
 
-pub fn panel_body_ui(ui: &mut Ui, panel: &entities::panels::Model, metrics: &Vec<entities::metrics::Model>, points: &Vec<entities::points::Model>) {
+pub fn panel_body_ui(
+	ui: &mut Ui,
+	panel: &entities::panels::Model,
+	metrics: &Vec<entities::metrics::Model>,
+	points: &Vec<entities::points::Model>,
+	panel_metric: &Vec<entities::panel_metric::Model>,
+) {
 	let mut p = Plot::new(format!("plot-{}", panel.name))
 		.height(panel.height as f32)
 		.allow_scroll(false)
 		.legend(Legend::default().position(Corner::LeftTop));
 
-	if panel.limit_view {
+	if panel.view_scroll {
 		p = p.set_margin_fraction(Vec2 { x: 0.0, y: 0.1 });
 	}
 
 
 	if panel.timeserie {
 		if panel.view_scroll {
-			let _now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
-			p = p.include_x(_now);
-			if panel.limit_view {
-				p = p
-					.include_x(_now + (panel.view_size as f64 * 3.0))
-					.include_x(_now - (panel.view_size as f64 * 60.0)); // ??? TODO
-			}
+			let now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
+			p = p.include_x(now)
+					.include_x(now + (panel.view_size as f64 * 3.0))
+					.include_x(now - (panel.view_size as f64 * 60.0)); // ??? TODO
 		}
 		p = p
 			.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false))
@@ -165,8 +183,9 @@ pub fn panel_body_ui(ui: &mut Ui, panel: &entities::panels::Model, metrics: &Vec
 	let min_x = now - size - off;
 	let max_x = now - off;
 	let chunk_size = if panel.reduce_view { Some(panel.view_chunks) } else { None };
+	let metric_ids : Vec<i64> = panel_metric.iter().filter(|x| x.panel_id == panel.id).map(|x| x.metric_id).collect();
 	for metric in metrics {
-		if metric.panel_id == panel.id {
+		if metric_ids.contains(&metric.id) {
 			// let values = metric.values(min_x, max_x, chunk_size, panel.average_view); 
 			let mut values : Vec<[f64;2]> = points
 				.iter()

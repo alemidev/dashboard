@@ -15,16 +15,42 @@ pub struct Model {
 	pub source_id: i64,
 	pub query_x: String,
 	pub query_y: String,
-	pub panel_id: i64,
 	pub color: i32,
 	pub position: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+	#[sea_orm(
+		belongs_to = "super::sources::Entity",
+		from = "Column::SourceId",
+		to = "super::sources::Column::Id"
+	)]
+	Source,
+
+	#[sea_orm(has_many = "super::points::Entity")]
+	Point,
+}
+
+impl Related<super::sources::Entity> for Entity {
+	fn to() -> RelationDef { Relation::Source.def() }
+}
+
+impl Related<super::points::Entity> for Entity {
+	fn to() -> RelationDef { Relation::Point.def() }
+}
+
+impl Related<super::panels::Entity> for Entity {
+	fn to() -> RelationDef {
+		super::panel_metric::Relation::Panel.def()
+	}
+
+	fn via() -> Option<RelationDef> {
+		Some(super::panel_metric::Relation::Metric.def().rev())
+	}
+}
 
 impl ActiveModelBehavior for ActiveModel {}
-
 
 impl Model {
 	pub fn extract(&self, value: &serde_json::Value) -> Result<PlotPoint, FetchError> {
@@ -51,7 +77,6 @@ impl Default for Model {
 			source_id: 0,
 			query_x: "".into(),
 			query_y: "".into(),
-			panel_id: 0,
 			color: 0,
 			position: 0,
 		}

@@ -1,8 +1,8 @@
-use eframe::{Frame, egui::{collapsing_header::CollapsingState, Context, Ui, Layout, ScrollArea, global_dark_light_mode_switch, TextEdit, Checkbox, Slider}, emath::Align};
+use eframe::{Frame, egui::{collapsing_header::CollapsingState, Context, Ui, Layout, ScrollArea, global_dark_light_mode_switch, TextEdit, Checkbox, Slider, ComboBox}, emath::Align};
 use sea_orm::{Set, Unchanged, ActiveValue::NotSet};
 use tokio::sync::watch;
 
-use crate::{gui::App, data::entities, util::unpack_color, worker::BackgroundAction};
+use crate::{gui::App, data::entities, util::{unpack_color, repack_color}, worker::{BackgroundAction, AppStateView}};
 
 // TODO make this not super specific!
 pub fn _confirmation_popup_delete_metric(_app: &mut App, ui: &mut Ui, _metric_index: usize) {
@@ -68,7 +68,7 @@ pub struct EditingModel {
 impl EditingModel {
 	pub fn id_repr(&self) -> String {
 		let prefix = match self.m {
-			EditingModelType::EditingPanel { panel: _ } => "panel",
+			EditingModelType::EditingPanel { panel: _, opts: _ } => "panel",
 			EditingModelType::EditingSource { source: _ } => "source",
 			EditingModelType::EditingMetric { metric: _ } => "metric",
 		};
@@ -83,9 +83,30 @@ impl EditingModel {
 		return !self.ready;
 	}
 
-	pub fn to_msg(&self) -> BackgroundAction {
+	pub fn make_edit_panel(
+		panel: entities::panels::Model,
+		metrics: &Vec<entities::metrics::Model>,
+		panel_metric: &Vec<entities::panel_metric::Model>
+	) -> EditingModel {
+		let metric_ids : Vec<i64> = panel_metric.iter().filter(|x| x.panel_id == panel.id).map(|x| x.metric_id).collect();
+		let mut opts = vec![false; metrics.len()];
+		for i in 0..metrics.len() {
+			if metric_ids.contains(&metrics[i].id) {
+				opts[i] = true;
+			}
+		}
+		EditingModel {
+			id: panel.id,
+			new: if panel.id > 0 { false } else { true },
+			m: EditingModelType::EditingPanel { panel, opts },
+			valid: false,
+			ready: false,
+		}
+	}
+
+	pub fn to_msg(&self, view:AppStateView) -> BackgroundAction {
 		match &self.m {
-			EditingModelType::EditingPanel { panel } =>
+			EditingModelType::EditingPanel { panel, opts: metrics } =>
 				BackgroundAction::UpdatePanel {
 					panel: entities::panels::ActiveModel {
 						id: if self.new { NotSet } else { Unchanged(panel.id) },
@@ -94,14 +115,21 @@ impl EditingModel {
 						view_size: Set(panel.view_size),
 						timeserie: Set(panel.timeserie),
 						height: Set(panel.height),
-						limit_view: Set(panel.limit_view),
 						position: Set(panel.position),
 						reduce_view: Set(panel.reduce_view),
 						view_chunks: Set(panel.view_chunks),
-						shift_view: Set(panel.shift_view),
 						view_offset: Set(panel.view_offset),
 						average_view: Set(panel.average_view),
-					}
+					},
+					metrics: view.metrics.borrow().iter()
+						.enumerate()
+						.filter(|(i,x)| *metrics.get(*i).unwrap_or(&false))
+						.map(|(i,m)| entities::panel_metric::ActiveModel {
+							id: NotSet,
+							panel_id: Set(panel.id),
+							metric_id: Set(m.id),
+						})
+						.collect(),
 				},
 			EditingModelType::EditingSource { source } =>
 				BackgroundAction::UpdateSource {
@@ -122,7 +150,6 @@ impl EditingModel {
 						name: Set(metric.name.clone()),
 						source_id: Set(metric.source_id),
 						color: Set(metric.color),
-						panel_id: Set(metric.panel_id),
 						query_x: Set(metric.query_x.clone()),
 						query_y: Set(metric.query_y.clone()),
 						position: Set(metric.position),
@@ -154,24 +181,35 @@ impl From<entities::panels::Model> for EditingModel {
 	fn from(p: entities::panels::Model) -> Self {
 		EditingModel {
 			new: if p.id == 0 { true } else { false },
-			id: p.id, m: EditingModelType::EditingPanel { panel: p }, valid: false, ready: false,
+			id: p.id, m: EditingModelType::EditingPanel { panel: p , opts: vec![] }, valid: false, ready: false,
 		}
 	}
 }
 
 pub enum EditingModelType {
-	EditingPanel  { panel : entities::panels::Model  },
+	EditingPanel  { panel : entities::panels::Model, opts: Vec<bool>  },
 	EditingSource { source: entities::sources::Model },
 	EditingMetric { metric: entities::metrics::Model },
 }
 
-pub fn popup_edit_ui(ui: &mut Ui, model: &mut EditingModel) {
+pub fn popup_edit_ui(
+	ui: &mut Ui,
+	model: &mut EditingModel,
+	sources: &Vec<entities::sources::Model>,
+	metrics: &Vec<entities::metrics::Model>
+) {
 	match &mut model.m {
-		EditingModelType::EditingPanel { panel } => {
+		EditingModelType::EditingPanel { panel, opts } => {
 			ui.heading(format!("Edit panel #{}", panel.id));
 			TextEdit::singleline(&mut panel.name)
 				.hint_text("name")
 				.show(ui);
+			for (i, metric) in metrics.iter().enumerate() {
+				if i >= opts.len() { // TODO safe but jank: always starts with all off
+					opts.push(false);
+				}
+				ui.checkbox(&mut opts[i], &metric.name);
+			}
 		},
 		EditingModelType::EditingSource { source } => {
 			ui.heading(format!("Edit source #{}", source.id));
@@ -189,11 +227,21 @@ pub fn popup_edit_ui(ui: &mut Ui, model: &mut EditingModel) {
 		EditingModelType::EditingMetric { metric } => {
 			ui.heading(format!("Edit metric #{}", metric.id));
 			ui.horizontal(|ui| {
-				ui.color_edit_button_srgba(&mut unpack_color(metric.color));
+				let mut color_buf = unpack_color(metric.color);
+				ui.color_edit_button_srgba(&mut color_buf);
+				metric.color = repack_color(color_buf);
 				TextEdit::singleline(&mut metric.name)
 					.hint_text("name")
 					.show(ui);
 			});
+			ComboBox::from_id_source(format!("source-selector-{}", metric.id))
+				.selected_text(format!("source: {:02}", metric.source_id))
+				.show_ui(ui, |ui| {
+					ui.selectable_value(&mut metric.source_id, -1, "None");
+					for s in sources.iter() {
+						ui.selectable_value(&mut metric.source_id, s.id, s.name.as_str());
+					}
+				});
 			TextEdit::singleline(&mut metric.query_x)
 				.hint_text("x")
 				.show(ui);
