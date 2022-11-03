@@ -11,8 +11,6 @@ use super::metric::metric_edit_ui;
 
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	let source_to_put_metric_on : Option<i64> = None;
-	let mut to_swap: Option<usize> = None;
-	let _to_insert: Vec<entities::metrics::Model> = Vec::new();
 	// let mut to_delete: Option<usize> = None;
 	let panels = &app.panels;
 	let panel_width = ui.available_width();
@@ -23,10 +21,9 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 			// TODO only vertical!
 			{
 				let sources = app.view.sources.borrow();
-				let sources_count = sources.len();
 				ui.heading("Sources");
 				ui.separator();
-				for (i, source) in sources.iter().enumerate() {
+				for source in sources.iter() {
 					ui.horizontal(|ui| {
 						ui.vertical(|ui| {
 							ui.add_space(10.0);

@@ -123,8 +123,8 @@ impl EditingModel {
 					},
 					metrics: view.metrics.borrow().iter()
 						.enumerate()
-						.filter(|(i,x)| *metrics.get(*i).unwrap_or(&false))
-						.map(|(i,m)| entities::panel_metric::ActiveModel {
+						.filter(|(i, _x)| *metrics.get(*i).unwrap_or(&false))
+						.map(|(_i, m)| entities::panel_metric::ActiveModel {
 							id: NotSet,
 							panel_id: Set(panel.id),
 							metric_id: Set(m.id),
