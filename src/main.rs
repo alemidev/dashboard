@@ -169,6 +169,8 @@ fn main() {
 
 		info!(target: "launcher", "Starting native GUI");
 
+		let db_name = args.db.clone().split('/').last().unwrap_or("").to_string();
+
 		eframe::run_native(
 			// TODO replace this with a loop that ends so we can cleanly exit the background worker
 			"dashboard",
@@ -181,7 +183,7 @@ fn main() {
 					Box::new(
 						App::new(
 							cc,
-							args.db,
+							db_name,
 							args.interval as i64,
 							view,
 							width_tx,
