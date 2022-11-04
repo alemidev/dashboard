@@ -1,4 +1,4 @@
-use eframe::{Frame, egui::{collapsing_header::CollapsingState, Context, Ui, Layout, ScrollArea, global_dark_light_mode_switch, TextEdit, Checkbox, Slider, ComboBox}, emath::Align};
+use eframe::{Frame, egui::{collapsing_header::CollapsingState, Context, Ui, Layout, ScrollArea, global_dark_light_mode_switch, TextEdit, Checkbox, Slider, ComboBox, DragValue}, emath::Align};
 use sea_orm::{Set, Unchanged, ActiveValue::NotSet};
 use tokio::sync::watch;
 
@@ -204,6 +204,10 @@ pub fn popup_edit_ui(
 			TextEdit::singleline(&mut panel.name)
 				.hint_text("name")
 				.show(ui);
+			ui.horizontal(|ui| {
+				ui.label("position");
+				ui.add(DragValue::new(&mut panel.position).clamp_range(0..=1000));
+			});
 			for (i, metric) in metrics.iter().enumerate() {
 				if i >= opts.len() { // TODO safe but jank: always starts with all off
 					opts.push(false);
@@ -219,6 +223,10 @@ pub fn popup_edit_ui(
 					.hint_text("name")
 					.show(ui);
 			});
+			ui.horizontal(|ui| {
+				ui.label("position");
+				ui.add(DragValue::new(&mut source.position).clamp_range(0..=1000));
+			});
 			TextEdit::singleline(&mut source.url)
 				.hint_text("url")
 				.show(ui);
@@ -233,6 +241,10 @@ pub fn popup_edit_ui(
 				TextEdit::singleline(&mut metric.name)
 					.hint_text("name")
 					.show(ui);
+			});
+			ui.horizontal(|ui| {
+				ui.label("position");
+				ui.add(DragValue::new(&mut metric.position).clamp_range(0..=1000));
 			});
 			ComboBox::from_id_source(format!("source-selector-{}", metric.id))
 				.selected_text(format!("source: {:02}", metric.source_id))
