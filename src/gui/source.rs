@@ -1,8 +1,7 @@
 use eframe::{
-	egui::{Layout, ScrollArea, Ui, DragValue, TextEdit, Checkbox},
+	egui::{Layout, ScrollArea, Ui, DragValue, TextEdit, Checkbox, Button},
 	emath::Align,
 };
-use rfd::FileDialog;
 
 use crate::gui::App;
 use crate::data::entities;
@@ -12,7 +11,6 @@ use super::metric::metric_edit_ui;
 pub fn source_panel(app: &mut App, ui: &mut Ui) {
 	let source_to_put_metric_on : Option<i64> = None;
 	// let mut to_delete: Option<usize> = None;
-	let panels = &app.panels;
 	let panel_width = ui.available_width();
 	let mut orphaned_metrics = app.view.metrics.borrow().clone();
 	ScrollArea::vertical()
@@ -24,21 +22,19 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 				ui.heading("Sources");
 				ui.separator();
 				for source in sources.iter() {
+					ui.add_space(5.0);
 					ui.horizontal(|ui| {
 						ui.vertical(|ui| {
-							ui.add_space(10.0);
-							if ui.small_button("+").clicked() { }
-							if ui.small_button("−").clicked() { }
+							ui.add_space(8.0);
+							if ui.small_button("#").clicked() {
+								app.editing.push(source.clone().into());
+							}
+							// if ui.small_button("−").clicked() { }
 						});
 						ui.vertical(|ui| { // actual sources list container
-							let remaining_width = ui.available_width();
 							ui.group(|ui| {
 								ui.horizontal(|ui| {
-									source_edit_ui(ui, source, remaining_width - 34.0);
-									if ui.small_button("×").clicked() {
-										// TODO don't add duplicates
-										app.editing.push(source.clone().into());
-									}
+									source_edit_ui(ui, source);
 								});
 								let metrics = app
 									.view
@@ -48,30 +44,25 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 									if metric.source_id == source.id {
 										orphaned_metrics.retain(|m| m.id != metric.id);
 										ui.horizontal(|ui| {
-											metric_edit_ui(
-												ui,
-												metric,
-												Some(&panels),
-												remaining_width - 53.0,
-											);
-											if ui.small_button("s").clicked() {
-												let path = FileDialog::new()
-													.add_filter("csv", &["csv"])
-													.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
-													.save_file();
-												if let Some(_path) = path {
-													// serialize_values(
-													// 	&*metric
-													// 		.data
-													// 		.read()
-													// 		.expect("Values RwLock poisoned"),
-													// 	metric,
-													// 	path,
-													// )
-													// .expect("Could not serialize data");
-												}
-											}
-											if ui.small_button("×").clicked() {
+											metric_edit_ui(ui, metric);
+											// if ui.small_button("s").clicked() {
+											// 	let path = FileDialog::new()
+											// 		.add_filter("csv", &["csv"])
+											// 		.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
+											// 		.save_file();
+											// 	if let Some(_path) = path {
+											// 		// serialize_values(
+											// 		// 	&*metric
+											// 		// 		.data
+											// 		// 		.read()
+											// 		// 		.expect("Values RwLock poisoned"),
+											// 		// 	metric,
+											// 		// 	path,
+											// 		// )
+											// 		// .expect("Could not serialize data");
+											// 	}
+											// }
+											if ui.small_button("#").clicked() {
 												// TODO don't add duplicates
 												app.editing.push(metric.clone().into());
 											}
@@ -82,47 +73,38 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 						});
 					});
 				}
+				ui.add_space(5.0);
 				ui.horizontal(|ui| { // 1 more for uncategorized sources
 					ui.vertical(|ui| {
-						ui.add_space(10.0);
-						if ui.small_button("+").clicked() { }
-						if ui.small_button("−").clicked() { }
+						ui.add_space(8.0);
+						ui.add_enabled(false, Button::new("#").small());
 					});
 					ui.vertical(|ui| { // actual sources list container
-						let remaining_width = ui.available_width();
 						ui.group(|ui| {
 							ui.horizontal(|ui| {
-								source_edit_ui(ui, &app.buffer_source, remaining_width - 34.0);
-								if ui.small_button("×").clicked() {
-									app.buffer_source = entities::sources::Model::default();
-								}
+								source_edit_ui(ui, &app.buffer_source);
 							});
 							for metric in orphaned_metrics.iter() {
 								ui.horizontal(|ui| {
-									metric_edit_ui(
-										ui,
-										metric,
-										Some(&panels),
-										remaining_width - 53.0,
-									);
-									if ui.small_button("s").clicked() {
-										// let path = FileDialog::new()
-										// 	.add_filter("csv", &["csv"])
-										// 	.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
-										// 	.save_file();
-										// if let Some(_path) = path {
-										// 	// serialize_values(
-										// 	// 	&*metric
-										// 	// 		.data
-										// 	// 		.read()
-										// 	// 		.expect("Values RwLock poisoned"),
-										// 	// 	metric,
-										// 	// 	path,
-										// 	// )
-										// 	// .expect("Could not serialize data");
-										// }
-									}
-									if ui.small_button("×").clicked() {
+									metric_edit_ui(ui, metric);
+									// if ui.small_button("s").clicked() {
+									// 	// let path = FileDialog::new()
+									// 	// 	.add_filter("csv", &["csv"])
+									// 	// 	.set_file_name(format!("{}-{}.csv", source.name, metric.name).as_str())
+									// 	// 	.save_file();
+									// 	// if let Some(_path) = path {
+									// 	// 	// serialize_values(
+									// 	// 	// 	&*metric
+									// 	// 	// 		.data
+									// 	// 	// 		.read()
+									// 	// 	// 		.expect("Values RwLock poisoned"),
+									// 	// 	// 	metric,
+									// 	// 	// 	path,
+									// 	// 	// )
+									// 	// 	// .expect("Could not serialize data");
+									// 	// }
+									// }
+									if ui.small_button("#").clicked() {
 										// TODO don't add duplicates
 										app.editing.push(metric.clone().into());
 									}
@@ -149,7 +131,7 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 						});
 					});
 				});
-				source_edit_ui(ui, &mut app.buffer_source, panel_width - 10.0);
+				source_edit_ui(ui, &mut app.buffer_source);
 				ui.add_space(5.0);
 				if app.padding {
 					ui.add_space(300.0);
@@ -192,24 +174,17 @@ pub fn _source_display_ui(ui: &mut Ui, source: &entities::sources::Model, _width
 	});
 }
 
-pub fn source_edit_ui(ui: &mut Ui, source: &entities::sources::Model, width: f32) {
+pub fn source_edit_ui(ui: &mut Ui, source: &entities::sources::Model) {
 	let mut interval = source.interval.clone();
 	let mut name = source.name.clone();
-	let mut url = source.url.clone();
 	let mut enabled = source.enabled.clone();
 	ui.horizontal(|ui| {
-		let text_width = width - 100.0;
 		ui.add_enabled(false, Checkbox::new(&mut enabled, ""));
-		ui.add_enabled(false, DragValue::new(&mut interval).clamp_range(1..=3600));
 		TextEdit::singleline(&mut name)
+			.desired_width(ui.available_width() - 58.0)
 			.interactive(false)
-			.desired_width(text_width / 4.0)
 			.hint_text("name")
 			.show(ui);
-		TextEdit::singleline(&mut url)
-			.interactive(false)
-			.desired_width(text_width * 3.0 / 4.0)
-			.hint_text("url")
-			.show(ui);
+		ui.add_enabled(false, DragValue::new(&mut interval).clamp_range(1..=3600));
 	});
 }

@@ -1,4 +1,4 @@
-use eframe::{egui::{Ui, Layout, Sense, color_picker::show_color_at, ComboBox, TextEdit}, emath::Align, epaint::Color32};
+use eframe::{egui::{Ui, Layout, Sense, color_picker::show_color_at, TextEdit}, emath::Align, epaint::Color32};
 
 use crate::{data::entities, util::unpack_color};
 
@@ -33,43 +33,29 @@ pub fn _metric_display_ui(ui: &mut Ui, metric: &entities::metrics::Model, _width
 	});
 }
 
-pub fn metric_edit_ui(ui: &mut Ui, metric: &entities::metrics::Model, panels: Option<&Vec<entities::panels::Model>>, width: f32) {
-	let text_width = width - 195.0;
+pub fn metric_edit_ui(ui: &mut Ui, metric: &entities::metrics::Model) {
 	let mut name = metric.name.clone();
 	let mut query_x = metric.query_x.clone();
 	let mut query_y = metric.query_y.clone();
-	let mut panel_id = 0;
 	ui.horizontal(|ui| {
 		// ui.color_edit_button_srgba(&mut unpack_color(metric.color));
 		color_square(ui, unpack_color(metric.color));
+		let available = ui.available_width() - 79.0;
 		TextEdit::singleline(&mut name)
+			.desired_width(available / 2.0)
 			.interactive(false)
-			.desired_width(text_width / 2.0)
 			.hint_text("name")
 			.show(ui);
 		ui.separator();
-		if query_x.len() > 0 {
-			TextEdit::singleline(&mut query_x)
-				.interactive(false)
-				.desired_width(text_width / 4.0)
-				.hint_text("x")
-				.show(ui);
-		}
-		TextEdit::singleline(&mut query_y)
+		TextEdit::singleline(&mut query_x)
+			.desired_width(available / 4.0)
 			.interactive(false)
-			.desired_width(if query_x.len() > 0 { 0.0 } else { 15.0 } + (text_width / if query_x.len() > 0 { 4.0 } else { 2.0 }))
+			.hint_text("x")
+			.show(ui);
+		TextEdit::singleline(&mut query_y)
+			.desired_width(available / 4.0)
+			.interactive(false)
 			.hint_text("y")
 			.show(ui);
-		if let Some(panels) = panels {
-			ComboBox::from_id_source(format!("panel-selector-{}", metric.id))
-				.width(60.0)
-				.selected_text("panel: ???")
-				.show_ui(ui, |ui| {
-					ui.selectable_value(&mut panel_id, -1, "None");
-					for p in panels {
-						ui.selectable_value(&mut panel_id, p.id, p.name.as_str());
-					}
-				});
-		}
 	});
 }
