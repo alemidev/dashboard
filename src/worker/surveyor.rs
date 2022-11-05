@@ -46,7 +46,6 @@ pub async fn surveyor_loop(
 					continue;
 				}
 			}
-			info!(target: "surveyor", "Reloaded sources and metrics");
 			last_fetch = Utc::now().timestamp();
 		}
 

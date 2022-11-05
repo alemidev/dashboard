@@ -252,8 +252,7 @@ impl AppState {
 		if let Err(e) = self.tx.points.send(self.points.clone().into()) {
 			warn!(target: "state-manager", "Could not send new points: {:?}", e); // TODO should be an err?
 		}
-		self.last_check = Utc::now().timestamp() - *self.width.borrow();
-		info!(target: "state-manager", "Reloaded points");
+		self.last_check = now;
 		Ok(())
 	}
 
@@ -264,19 +263,15 @@ impl AppState {
 	
 		// fetch previous points
 		if new_width != self.last_width {
-			let mut previous_points = entities::points::Entity::find()
+			let previous_points = entities::points::Entity::find()
 				.filter(
 					Condition::all()
 						.add(entities::points::Column::X.gte(now - new_width))
 						.add(entities::points::Column::X.lte(now - self.last_width))
 				)
-				.order_by(entities::points::Column::X, Order::Asc)
+				.order_by(entities::points::Column::X, Order::Desc)
 				.all(db)
 				.await?;
-			if previous_points.len() > 0 {
-				info!(target: "state-manager", "Fetched {} previous points", previous_points.len());
-			}
-			previous_points.reverse(); // TODO wasteful!
 			for p in previous_points {
 				self.points.push_front(p);
 				changes = true;
