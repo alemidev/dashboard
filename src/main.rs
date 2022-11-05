@@ -9,8 +9,8 @@ use tracing::{info, error};
 use tracing_subscriber::filter::filter_fn;
 
 use eframe::egui::Context;
-use clap::Parser;
-use tokio::sync::watch;
+use clap::{Parser, Subcommand};
+use tokio::sync::{watch, mpsc};
 use sea_orm::Database;
 
 use worker::visualizer::AppState;
@@ -25,16 +25,8 @@ use gui::{
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct CliArgs {
-	/// Connection string for database to use
-	db: String,
-
-	/// Run background worker
-	#[arg(long, default_value_t = false)]
-	worker: bool,
-
-	/// Run user interface
-	#[arg(long, default_value_t = false)]
-	gui: bool,
+	#[clap(subcommand)]
+	mode: Mode,
 
 	/// Check interval for background worker
 	#[arg(short, long, default_value_t = 10)]
@@ -47,6 +39,19 @@ struct CliArgs {
 	/// How many log lines to keep in memory
 	#[arg(short, long, default_value_t = 1000)]
 	log_size: u64,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+enum Mode {
+	/// Run as background service fetching sources from db
+	Worker {
+		/// Connection string for database to use
+		db_uri: String,
+	},
+	/// Run as foreground user interface displaying collected data
+	GUI {
+
+	},
 }
 
 // When compiling for web:
@@ -83,125 +88,148 @@ fn main() {
 
 	setup_tracing(logger.layer());
 
-	let state = match AppState::new(
-		width_rx,
-		args.interval as i64,
-		args.cache_time as i64,
-	) {
-		Ok(s) => s,
-		Err(e) => {
-			error!(target: "launcher", "Could not create application state: {:?}", e);
-			return;
-		}
-	};
-
-	let view = state.view();
-	let run_rx_clone = run_rx.clone();
-	let db_uri = args.db.clone();
-	
-	let worker = std::thread::spawn(move || {
-		tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.unwrap()
-			.block_on(async {
-				let db = match Database::connect(db_uri.clone()).await {
-					Ok(v) => v,
-					Err(e) => {
-						error!(target: "launcher", "Could not connect to db: {:?}", e);
-						return;
-					}
-				};
-				info!(target: "launcher", "Connected to '{}'", db_uri);
-
-				let mut jobs = vec![];
-
-				let run_rx_clone_clone = run_rx_clone.clone();
-
-				jobs.push(
-					tokio::spawn(async move {
-						while *run_rx_clone_clone.borrow() {
-							if let Some(ctx) = &*ctx_rx.borrow() {
-								ctx.request_repaint();
+	match args.mode {
+		Mode::Worker { db_uri } => {
+			let run_rx_clone = run_rx.clone();
+			let worker = std::thread::spawn(move || {
+				tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.unwrap()
+					.block_on(async {
+						let db = match Database::connect(db_uri.clone()).await {
+							Ok(v) => v,
+							Err(e) => {
+								error!(target: "launcher", "Could not connect to db: {:?}", e);
+								return;
 							}
-							tokio::time::sleep(std::time::Duration::from_secs(args.interval)).await;
+						};
+						info!(target: "launcher", "Connected to '{}'", db_uri);
+
+						let mut jobs = vec![];
+
+						jobs.push(
+							tokio::spawn(logger.worker(run_rx_clone.clone()))
+						);
+
+						jobs.push(
+							tokio::spawn(
+								surveyor_loop(
+									db.clone(),
+									args.interval as i64,
+									args.cache_time as i64,
+									run_rx_clone.clone(),
+								)
+							)
+						);
+
+						for (i, job) in jobs.into_iter().enumerate() {
+							if let Err(e) = job.await {
+								error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
+							}
 						}
+
+						info!(target: "launcher", "Stopping background worker");
 					})
-				);
+			});
 
-				jobs.push(
-					tokio::spawn(logger.worker(run_rx_clone.clone()))
-				);
+			worker.join().unwrap();
+		},
+		Mode::GUI { } => {
+			let (uri_tx, uri_rx) = mpsc::channel(10);
+			let state = match AppState::new(
+				width_rx,
+				uri_rx,
+				args.interval as i64,
+				args.cache_time as i64,
+			) {
+				Ok(s) => s,
+				Err(e) => {
+					error!(target: "launcher", "Could not create application state: {:?}", e);
+					return;
+				}
+			};
+			let view = state.view();
+			let run_rx_clone = run_rx.clone();
+			
+			let worker = std::thread::spawn(move || {
+				tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.unwrap()
+					.block_on(async {
+						let mut jobs = vec![];
 
-				if args.worker {
-					jobs.push(
-						tokio::spawn(
-							surveyor_loop(
-								db.clone(),
+						let run_rx_clone_clone = run_rx_clone.clone();
+
+						jobs.push(
+							tokio::spawn(async move {
+								while *run_rx_clone_clone.borrow() {
+									if let Some(ctx) = &*ctx_rx.borrow() {
+										ctx.request_repaint();
+									}
+									tokio::time::sleep(std::time::Duration::from_secs(args.interval)).await;
+								}
+							})
+						);
+
+						jobs.push(
+							tokio::spawn(logger.worker(run_rx_clone.clone()))
+						);
+
+						jobs.push(
+							tokio::spawn(
+								state.worker(run_rx_clone.clone())
+							)
+						);
+
+						for (i, job) in jobs.into_iter().enumerate() {
+							if let Err(e) = job.await {
+								error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
+							}
+						}
+
+						info!(target: "launcher", "Stopping background worker");
+					})
+			});
+
+			let native_options = eframe::NativeOptions::default();
+
+			info!(target: "launcher", "Starting native GUI");
+
+			eframe::run_native(
+				// TODO replace this with a loop that ends so we can cleanly exit the background worker
+				"dashboard",
+				native_options,
+				Box::new(
+					move |cc| {
+						if let Err(_e) = ctx_tx.send(Some(cc.egui_ctx.clone())) {
+							error!(target: "launcher", "Could not share reference to egui context (won't be able to periodically refresh window)");
+						};
+						Box::new(
+							App::new(
+								cc,
+								uri_tx,
 								args.interval as i64,
-								args.cache_time as i64,
-								run_rx_clone.clone(),
+								view,
+								width_tx,
+								logger_view,
 							)
 						)
-					);
-				}
-
-				if args.gui {
-					jobs.push(
-						tokio::spawn(
-							state.worker(db, run_rx_clone.clone())
-						)
-					);
-				}
-
-				for (i, job) in jobs.into_iter().enumerate() {
-					if let Err(e) = job.await {
-						error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
 					}
-				}
+				),
+			);
 
-				info!(target: "launcher", "Stopping background worker");
-			})
-	});
+			info!(target: "launcher", "Stopping native GUI");
 
-	if args.gui {
-		let native_options = eframe::NativeOptions::default();
+			if let Err(e) = run_tx.send(false) {
+				error!(target: "launcher", "Error signaling end to workers: {:?}", e);
+			}
 
-		info!(target: "launcher", "Starting native GUI");
-
-		let db_name = args.db.clone().split('/').last().unwrap_or("").to_string();
-
-		eframe::run_native(
-			// TODO replace this with a loop that ends so we can cleanly exit the background worker
-			"dashboard",
-			native_options,
-			Box::new(
-				move |cc| {
-					if let Err(_e) = ctx_tx.send(Some(cc.egui_ctx.clone())) {
-						error!(target: "launcher", "Could not share reference to egui context (won't be able to periodically refresh window)");
-					};
-					Box::new(
-						App::new(
-							cc,
-							db_name,
-							args.interval as i64,
-							view,
-							width_tx,
-							logger_view,
-						)
-					)
-				}
-			),
-		);
-
-		info!(target: "launcher", "Stopping native GUI");
-
-		if let Err(e) = run_tx.send(false) {
-			error!(target: "launcher", "Error signaling end to workers: {:?}", e);
+			if let Err(e) = worker.join() {
+				error!(target: "launcher", "Error joining background thread : {:?}", e);
+			}
 		}
 	}
 
-	if let Err(e) = worker.join() {
-		error!(target: "launcher", "Error joining background thread : {:?}", e);
-	}
 }
