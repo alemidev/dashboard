@@ -100,11 +100,11 @@ fn main() {
 					.block_on(async {
 						let mut jobs = vec![];
 
-						for db_uri in db_uris {
+						for (i, db_uri) in db_uris.iter().enumerate() {
 							let db = match Database::connect(db_uri.clone()).await {
 								Ok(v) => v,
 								Err(e) => {
-									error!(target: "worker", "Could not connect to db: {:?}", e);
+									error!(target: "worker", "Could not connect to db #{}: {:?}", i, e);
 									return;
 								}
 							};
@@ -118,6 +118,7 @@ fn main() {
 										args.interval as i64,
 										args.cache_time as i64,
 										run_rx.clone(),
+										i,
 									)
 								)
 							);
