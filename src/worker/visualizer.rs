@@ -239,11 +239,11 @@ impl AppState {
 	pub async fn flush_data(&mut self, db: &DatabaseConnection) -> Result<(), DbErr> {
 		let now = Utc::now().timestamp();
 		self.fetch(db).await?;
-		let new_width = *self.width.borrow() * 60; // TODO it's in minutes somewhere...
+		self.last_width = *self.width.borrow() * 60; // TODO it's in minutes somewhere...
 		self.points = entities::points::Entity::find()
 			.filter(
 				Condition::all()
-					.add(entities::points::Column::X.gte((now - new_width) as f64))
+					.add(entities::points::Column::X.gte((now - self.last_width) as f64))
 					.add(entities::points::Column::X.lte(now as f64))
 			)
 			.order_by(entities::points::Column::X, Order::Asc)
@@ -278,8 +278,8 @@ impl AppState {
 			}
 		}
 	
-		// fetch new points
-		let lower_bound = std::cmp::max(self.last_check, now - new_width);
+		// fetch new points, use last_width otherwise it fetches same points as above
+		let lower_bound = std::cmp::max(self.last_check, now - self.last_width);
 		let new_points = entities::points::Entity::find()
 			.filter(
 				Condition::all()
@@ -297,7 +297,7 @@ impl AppState {
 	
 		// remove old points
 		while let Some(p) = self.points.get(0) {
-			if (p.x as i64) >= now - (*self.width.borrow() * 60) {
+			if (p.x as i64) >= now - new_width {
 				break;
 			}
 			self.points.pop_front();
