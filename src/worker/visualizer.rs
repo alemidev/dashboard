@@ -279,10 +279,11 @@ impl AppState {
 		}
 	
 		// fetch new points
+		let lower_bound = std::cmp::max(self.last_check, now - new_width);
 		let new_points = entities::points::Entity::find()
 			.filter(
 				Condition::all()
-					.add(entities::points::Column::X.gte(self.last_check as f64))
+					.add(entities::points::Column::X.gte(lower_bound as f64))
 					.add(entities::points::Column::X.lte(now as f64))
 			)
 			.order_by(entities::points::Column::X, Order::Asc)
@@ -332,6 +333,8 @@ impl AppState {
 								Ok(new_db) => {
 									info!("Connected to '{}'", uri);
 									db = new_db;
+									self.last_check = 0;
+									self.last_refresh = 0;
 								},
 								Err(e) => error!(target: "state-manager", "Could not connect to db: {:?}", e),
 							};
