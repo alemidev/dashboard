@@ -109,7 +109,7 @@ fn main() {
 								}
 							};
 
-							info!(target: "worker", "Connected to '{}'", db_uri);
+							info!(target: "worker", "Connected to #{}: '{}'", i, db_uri);
 
 							jobs.push(
 								tokio::spawn(
