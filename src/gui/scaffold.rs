@@ -72,7 +72,7 @@ impl EditingModel {
 			EditingModelType::EditingSource { source: _ } => "source",
 			EditingModelType::EditingMetric { metric: _ } => "metric",
 		};
-		format!("edit_{}_{}", prefix, self.id)
+		format!("edit {} #{}", prefix, self.id)
 	}
 
 	pub fn should_fetch(&self) -> bool {
@@ -200,7 +200,6 @@ pub fn popup_edit_ui(
 ) {
 	match &mut model.m {
 		EditingModelType::EditingPanel { panel, opts } => {
-			ui.heading(format!("Edit panel #{}", panel.id));
 			TextEdit::singleline(&mut panel.name)
 				.hint_text("name")
 				.show(ui);
@@ -216,7 +215,6 @@ pub fn popup_edit_ui(
 			}
 		},
 		EditingModelType::EditingSource { source } => {
-			ui.heading(format!("Edit source #{}", source.id));
 			ui.horizontal(|ui| {
 				ui.add(Checkbox::new(&mut source.enabled, ""));
 				TextEdit::singleline(&mut source.name)
@@ -233,7 +231,6 @@ pub fn popup_edit_ui(
 			ui.add(Slider::new(&mut source.interval, 1..=3600).text("interval"));
 		},
 		EditingModelType::EditingMetric { metric } => {
-			ui.heading(format!("Edit metric #{}", metric.id));
 			ui.horizontal(|ui| {
 				let mut color_buf = unpack_color(metric.color);
 				ui.color_edit_button_srgba(&mut color_buf);
@@ -284,29 +281,30 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 		ui.separator();
 		ui.checkbox(&mut app.sidebar, "sources");
 		ui.separator();
-		if ui.button("reset").clicked() {
-			app.panels = app.view.panels.borrow().clone();
-		}
-		ui.separator();
-		if ui.button("save").clicked() {
-			app.save_all_panels();
-		}
-		ui.separator();
 		if ui.button("refresh").clicked() {
 			app.refresh_data();
 		}
-		ui.separator();
-		if ui.button("new panel").clicked() {
-			app.editing.push(entities::panels::Model::default().into());
+		TextEdit::singleline(&mut app.db_uri)
+			.hint_text("db uri")
+			.show(ui);
+		if ui.button("connect").clicked() {
+			app.db_uri_tx.blocking_send(app.db_uri.clone()).unwrap(); // TODO!!!
+			app.refresh_data();
 		}
 		ui.separator();
-		if ui.button("new source").clicked() {
-			app.editing.push(entities::sources::Model::default().into());
+		ui.checkbox(&mut app.edit, "edit");
+		if app.edit {
+			if ui.button("reset").clicked() {
+				app.panels = app.view.panels.borrow().clone();
+			}
+			if ui.button("save").clicked() {
+				app.save_all_panels();
+			}
+			if ui.button("+").clicked() {
+				app.editing.push(entities::panels::Model::default().into());
+			}
 		}
 		ui.separator();
-		if ui.button("new metric").clicked() {
-			app.editing.push(entities::metrics::Model::default().into());
-		}
 		// ui.separator();
 		// ui.checkbox(&mut app.edit, "edit");
 		// if app.edit {

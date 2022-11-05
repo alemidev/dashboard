@@ -6,7 +6,7 @@ mod scaffold;
 
 use chrono::Utc;
 use eframe::egui::{CentralPanel, Context, SidePanel, TopBottomPanel, Window};
-use tokio::sync::watch;
+use tokio::sync::{watch, mpsc};
 use tracing::error;
 
 use crate::{data::entities, worker::{visualizer::AppStateView, BackgroundAction}};
@@ -21,7 +21,8 @@ use self::scaffold::{footer, EditingModel, popup_edit_ui};
 
 pub struct App {
 	view: AppStateView,
-	db_path: String,
+	db_uri: String,
+	db_uri_tx: mpsc::Sender<String>,
 	interval: i64,
 	last_redraw: i64,
 
@@ -31,19 +32,19 @@ pub struct App {
 
 	// buffer_panel: entities::panels::Model,
 	buffer_source: entities::sources::Model,
-	// buffer_metric: entities::metrics::Model,
+	buffer_metric: entities::metrics::Model,
 
 	edit: bool,
 	editing: Vec<EditingModel>,
 	sidebar: bool,
-	padding: bool,
+	_padding: bool,
 	// windows: Vec<Window<'open>>,
 }
 
 impl App {
 	pub fn new(
 		_cc: &eframe::CreationContext,
-		db_path: String,
+		db_uri_tx: mpsc::Sender<String>,
 		interval: i64,
 		view: AppStateView,
 		width_tx: watch::Sender<i64>,
@@ -51,13 +52,15 @@ impl App {
 	) -> Self {
 		let panels = view.panels.borrow().clone();
 		Self {
-			db_path, interval, panels, width_tx, view, logger_view,
+			db_uri_tx, interval, panels, width_tx, view, logger_view,
+			db_uri: "".into(),
 			buffer_source: entities::sources::Model::default(),
+			buffer_metric: entities::metrics::Model::default(),
 			last_redraw: 0,
 			edit: false,
 			editing: vec![],
 			sidebar: true,
-			padding: false,
+			_padding: false,
 			// windows: vec![],
 		}
 	}
@@ -90,7 +93,7 @@ impl eframe::App for App {
 		});
 
 		TopBottomPanel::bottom("footer").show(ctx, |ui| {
-			footer(ctx, ui, self.logger_view.clone(), self.db_path.clone(), self.view.points.borrow().len());
+			footer(ctx, ui, self.logger_view.clone(), self.db_uri.clone(), self.view.points.borrow().len());
 		});
 
 		for m in self.editing.iter_mut() {
@@ -101,7 +104,7 @@ impl eframe::App for App {
 
 		if self.sidebar {
 			SidePanel::left("sources-bar")
-				.width_range(if self.edit { 400.0..=1000.0 } else { 280.0..=680.0 })
+				.width_range(280.0..=800.0)
 				.default_width(if self.edit { 450.0 } else { 330.0 })
 				.show(ctx, |ui| source_panel(self, ui));
 		}
@@ -110,7 +113,13 @@ impl eframe::App for App {
 			main_content(self, ctx, ui);
 		});
 
-		if let Some(viewsize) = self.panels.iter().map(|p| p.view_size + p.view_offset).max() {
+		if let Some(viewsize) =
+			self.panels
+				.iter()
+				.chain(self.view.panels.borrow().iter())
+				.map(|p| p.view_size + p.view_offset)
+				.max()
+		{
 			if let Err(e) = self.width_tx.send(viewsize as i64) {
 				error!(target: "app", "Could not update fetch size : {:?}", e);
 			}

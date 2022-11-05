@@ -1,7 +1,4 @@
-use eframe::{
-	egui::{Layout, ScrollArea, Ui, DragValue, TextEdit, Checkbox, Button},
-	emath::Align,
-};
+use eframe::egui::{ScrollArea, Ui, DragValue, TextEdit, Checkbox};
 
 use crate::gui::App;
 use crate::data::entities;
@@ -77,7 +74,9 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 				ui.horizontal(|ui| { // 1 more for uncategorized sources
 					ui.vertical(|ui| {
 						ui.add_space(8.0);
-						ui.add_enabled(false, Button::new("#").small());
+						if ui.small_button("+").clicked() {
+							app.editing.push(entities::sources::Model::default().into());
+						}
 					});
 					ui.vertical(|ui| { // actual sources list container
 						ui.group(|ui| {
@@ -110,32 +109,16 @@ pub fn source_panel(app: &mut App, ui: &mut Ui) {
 									}
 								});
 							}
+							// Add an empty metric to insert new ones
+							ui.horizontal(|ui| {
+								metric_edit_ui(ui, &mut app.buffer_metric);
+								if ui.small_button("+").clicked() {
+									app.editing.push(entities::metrics::Model::default().into());
+								}
+							});
 						});
 					});
 				});
-			}
-			if app.edit {
-				ui.separator();
-				ui.horizontal(|ui| {
-					ui.heading("new source");
-					ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
-						ui.horizontal(|ui| {
-							if ui.button("add").clicked() {
-								// if let Err(e) = app.data.add_source(&app.input_source) {
-								// 	error!(target: "ui", "Error adding source : {:?}", e);
-								// } else {
-								// 	app.input_source.id += 1;
-								// }
-							}
-							ui.toggle_value(&mut app.padding, "#");
-						});
-					});
-				});
-				source_edit_ui(ui, &mut app.buffer_source);
-				ui.add_space(5.0);
-				if app.padding {
-					ui.add_space(300.0);
-				}
 			}
 		});
 	//if let Some(i) = to_delete {

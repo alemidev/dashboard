@@ -11,39 +11,33 @@ use crate::data::entities;
 use super::scaffold::EditingModel;
 
 pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
-	let mut _to_swap: Option<usize> = None;
-	let mut _to_delete: Option<usize> = None;
+	let metrics = app.view.metrics.borrow();
 	ScrollArea::vertical().show(ui, |ui| {
-		let panels = &mut app.panels;
-		let _panels_count = panels.len();
-		let metrics = app.view.metrics.borrow();
-		for (index, panel) in panels.iter_mut().enumerate() {
-			if index > 0 {
-				ui.separator(); // only show this if there is at least one panel
+		ui.separator();
+		if app.edit {
+			for mut panel in app.panels.iter_mut() {
+				CollapsingState::load_with_default_open(
+					ctx,
+					ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
+					true,
+				)
+				.show_header(ui, |ui| {
+					panel_title_ui_edit(ui, &mut panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
+				})
+				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
 			}
-			CollapsingState::load_with_default_open(
-				ctx,
-				ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
-				true,
-			)
-			.show_header(ui, |ui| {
-				// if ui.small_button(" + ").clicked() {
-				// 	if index > 0 {
-				// 		to_swap = Some(index); // TODO kinda jank but is there a better way?
-				// 	}
-				// }
-				// if ui.small_button(" − ").clicked() {
-				// 	if index < panels_count - 1 {
-				// 		to_swap = Some(index + 1); // TODO kinda jank but is there a better way?
-				// 	}
-				// }
-				// if ui.small_button(" × ").clicked() {
-				// 	to_delete = Some(index); // TODO kinda jank but is there a better way?
-				// }
-				// ui.separator();
-				panel_title_ui(ui, panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
-			})
-			.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+		} else {
+			for panel in app.view.panels.borrow().iter() {
+				CollapsingState::load_with_default_open(
+					ctx,
+					ui.make_persistent_id(format!("panel-{}-compressable", panel.id)),
+					true,
+				)
+				.show_header(ui, |ui| {
+					panel_title_ui(ui, &panel);
+				})
+				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+			}
 		}
 	});
 }
@@ -56,6 +50,46 @@ pub fn _panel_edit_inline_ui(_ui: &mut Ui, _panel: &entities::panels::Model) {
 }
 
 pub fn panel_title_ui(
+	ui: &mut Ui,
+	panel: &entities::panels::Model,
+) { // TODO make edit UI in separate func
+	ui.horizontal(|ui| {
+		ui.heading(panel.name.as_str());
+		ui.with_layout(Layout::right_to_left(eframe::emath::Align::Min), |ui| {
+			ui.horizontal(|_ui| {
+				// TODO just show these, with no editing
+				// ui.toggle_value(&mut panel.view_scroll, "🔒");
+				// ui.separator();
+				// ui.add(
+				// 	DragValue::new(&mut panel.view_size)
+				// 		.speed(10)
+				// 		.suffix(" min")
+				// 		.clamp_range(0..=2147483647i32),
+				// );
+				// ui.separator();
+				// ui.add(
+				// 	DragValue::new(&mut panel.view_offset)
+				// 		.speed(10)
+				// 		.suffix(" min")
+				// 		.clamp_range(0..=2147483647i32),
+				// );
+				// ui.separator();
+				// if panel.reduce_view {
+				// 	ui.add(
+				// 		DragValue::new(&mut panel.view_chunks)
+				// 			.speed(1)
+				// 			.prefix("x")
+				// 			.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
+				// 	);
+				// 	ui.toggle_value(&mut panel.average_view, "avg");
+				// }
+				// ui.toggle_value(&mut panel.reduce_view, "reduce");
+			});
+		});
+	});
+}
+
+pub fn panel_title_ui_edit(
 	ui: &mut Ui,
 	panel: &mut entities::panels::Model,
 	editing: &mut Vec<EditingModel>,
