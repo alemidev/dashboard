@@ -93,7 +93,7 @@ fn main() {
 			setup_tracing(None);
 
 			let worker = std::thread::spawn(move || {
-				tokio::runtime::Builder::new_current_thread()
+				tokio::runtime::Builder::new_multi_thread()
 					.enable_all()
 					.build()
 					.unwrap()
@@ -114,7 +114,7 @@ fn main() {
 							jobs.push(
 								tokio::spawn(
 									surveyor_loop(
-										db.clone(),
+										db,
 										args.interval as i64,
 										args.cache_time as i64,
 										run_rx.clone(),
