@@ -25,6 +25,7 @@ use gui::{
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct CliArgs {
+	/// Which mode to run in
 	#[clap(subcommand)]
 	mode: Mode,
 
@@ -46,7 +47,8 @@ enum Mode {
 	/// Run as background service fetching sources from db
 	Worker {
 		/// Connection string for database to use
-		db_uri: String,
+		#[arg(required = true)]
+		db_uris: Vec<String>,
 	},
 	/// Run as foreground user interface displaying collected data
 	GUI {
@@ -56,7 +58,7 @@ enum Mode {
 
 // When compiling for web:
 #[cfg(target_arch = "wasm32")]
-fn setup_tracing(_layer: InternalLoggerLayer) {
+fn setup_tracing(_layer: Option<InternalLoggerLayer>) {
 	// Make sure panics are logged using `console.error`.
 	console_error_panic_hook::set_once();
 	// Redirect tracing to console.log and friends:
@@ -65,13 +67,17 @@ fn setup_tracing(_layer: InternalLoggerLayer) {
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
-fn setup_tracing(layer: InternalLoggerLayer) {
-	tracing_subscriber::registry()
+fn setup_tracing(layer: Option<InternalLoggerLayer>) {
+	let sub = tracing_subscriber::registry()
 		.with(LevelFilter::INFO)
 		.with(filter_fn(|x| x.target() != "sqlx::query"))
-		.with(tracing_subscriber::fmt::Layer::new())
-		.with(layer)
-		.init();
+		.with(tracing_subscriber::fmt::Layer::new());
+
+	if let Some(layer) = layer {
+		sub.with(layer).init();
+	} else {
+		sub.init();
+	}
 }
 
 fn main() {
@@ -80,63 +86,74 @@ fn main() {
 	// TODO is there an alternative to this ugly botch?
 	let (ctx_tx, ctx_rx) = watch::channel::<Option<Context>>(None);
 
-	let (width_tx, width_rx) = watch::channel(0);
 	let (run_tx, run_rx) = watch::channel(true);
 
-	let logger = InternalLogger::new(args.log_size as usize);
-	let logger_view = logger.view();
-
-	setup_tracing(logger.layer());
-
 	match args.mode {
-		Mode::Worker { db_uri } => {
-			let run_rx_clone = run_rx.clone();
+		Mode::Worker { db_uris } => {
+			setup_tracing(None);
+
 			let worker = std::thread::spawn(move || {
 				tokio::runtime::Builder::new_current_thread()
 					.enable_all()
 					.build()
 					.unwrap()
 					.block_on(async {
-						let db = match Database::connect(db_uri.clone()).await {
-							Ok(v) => v,
-							Err(e) => {
-								error!(target: "launcher", "Could not connect to db: {:?}", e);
-								return;
-							}
-						};
-						info!(target: "launcher", "Connected to '{}'", db_uri);
-
 						let mut jobs = vec![];
 
-						jobs.push(
-							tokio::spawn(logger.worker(run_rx_clone.clone()))
-						);
+						for db_uri in db_uris {
+							let db = match Database::connect(db_uri.clone()).await {
+								Ok(v) => v,
+								Err(e) => {
+									error!(target: "worker", "Could not connect to db: {:?}", e);
+									return;
+								}
+							};
 
-						jobs.push(
-							tokio::spawn(
-								surveyor_loop(
-									db.clone(),
-									args.interval as i64,
-									args.cache_time as i64,
-									run_rx_clone.clone(),
+							info!(target: "worker", "Connected to '{}'", db_uri);
+
+							jobs.push(
+								tokio::spawn(
+									surveyor_loop(
+										db.clone(),
+										args.interval as i64,
+										args.cache_time as i64,
+										run_rx.clone(),
+									)
 								)
-							)
-						);
+							);
+						}
 
 						for (i, job) in jobs.into_iter().enumerate() {
 							if let Err(e) = job.await {
-								error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
+								error!(target: "worker", "Could not join task #{}: {:?}", i, e);
 							}
 						}
 
-						info!(target: "launcher", "Stopping background worker");
+						info!(target: "worker", "Stopping background worker");
 					})
 			});
 
-			worker.join().unwrap();
+			let (sigint_tx, sigint_rx) = std::sync::mpsc::channel(); // TODO can I avoid using a std channel?
+			ctrlc::set_handler(move ||
+				sigint_tx.send(()).expect("Could not send signal on channel")
+			).expect("Could not set SIGINT handler");
+
+			sigint_rx.recv().expect("Could not receive signal from channel");
+			info!(target: "launcher", "Received SIGINT, stopping...");
+
+			run_tx.send(false).unwrap_or(()); // ignore errors
+			worker.join().expect("Failed joining worker thread");
 		},
+
 		Mode::GUI { } => {
 			let (uri_tx, uri_rx) = mpsc::channel(10);
+			let (width_tx, width_rx) = watch::channel(0);
+
+			let logger = InternalLogger::new(args.log_size as usize);
+			let logger_view = logger.view();
+
+			setup_tracing(Some(logger.layer()));
+
 			let state = match AppState::new(
 				width_rx,
 				uri_rx,
@@ -150,7 +167,6 @@ fn main() {
 				}
 			};
 			let view = state.view();
-			let run_rx_clone = run_rx.clone();
 			
 			let worker = std::thread::spawn(move || {
 				tokio::runtime::Builder::new_current_thread()
@@ -160,7 +176,7 @@ fn main() {
 					.block_on(async {
 						let mut jobs = vec![];
 
-						let run_rx_clone_clone = run_rx_clone.clone();
+						let run_rx_clone_clone = run_rx.clone();
 
 						jobs.push(
 							tokio::spawn(async move {
@@ -174,22 +190,22 @@ fn main() {
 						);
 
 						jobs.push(
-							tokio::spawn(logger.worker(run_rx_clone.clone()))
+							tokio::spawn(logger.worker(run_rx.clone()))
 						);
 
 						jobs.push(
 							tokio::spawn(
-								state.worker(run_rx_clone.clone())
+								state.worker(run_rx.clone())
 							)
 						);
 
 						for (i, job) in jobs.into_iter().enumerate() {
 							if let Err(e) = job.await {
-								error!(target: "launcher", "Could not join task #{}: {:?}", i, e);
+								error!(target: "worker", "Could not join task #{}: {:?}", i, e);
 							}
 						}
 
-						info!(target: "launcher", "Stopping background worker");
+						info!(target: "worker", "Stopping background worker");
 					})
 			});
 
@@ -220,15 +236,11 @@ fn main() {
 				),
 			);
 
-			info!(target: "launcher", "Stopping native GUI");
+			info!(target: "launcher", "GUI quit, stopping background worker...");
 
-			if let Err(e) = run_tx.send(false) {
-				error!(target: "launcher", "Error signaling end to workers: {:?}", e);
-			}
+			run_tx.send(false).unwrap_or(()); // ignore errors
 
-			if let Err(e) = worker.join() {
-				error!(target: "launcher", "Error joining background thread : {:?}", e);
-			}
+			worker.join().expect("Failed joining worker thread");
 		}
 	}
 

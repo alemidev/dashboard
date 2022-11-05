@@ -126,27 +126,27 @@ impl AppState {
 			.order_by(entities::panels::Column::Position, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.panels.send(self.panels.clone()) { 
-			error!(target: "worker", "Could not send panels update: {:?}", e);
+			error!(target: "state-manager", "Could not send panels update: {:?}", e);
 		}
 
 		self.sources = entities::sources::Entity::find()
 			.order_by(entities::sources::Column::Position, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.sources.send(self.sources.clone()) {
-			error!(target: "worker", "Could not send sources update: {:?}", e);
+			error!(target: "state-manager", "Could not send sources update: {:?}", e);
 		}
 
 		self.metrics = entities::metrics::Entity::find()
 			.order_by(entities::metrics::Column::Position, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.metrics.send(self.metrics.clone()) {
-			error!(target: "worker", "Could not send metrics update: {:?}", e);
+			error!(target: "state-manager", "Could not send metrics update: {:?}", e);
 		}
 
 		self.panel_metric = entities::panel_metric::Entity::find()
 			.all(db).await?;
 		if let Err(e) = self.tx.panel_metric.send(self.panel_metric.clone()) {
-			error!(target: "worker", "Could not send panel-metric update: {:?}", e);
+			error!(target: "state-manager", "Could not send panel-metric update: {:?}", e);
 		}
 
 		self.last_refresh = chrono::Utc::now().timestamp();
@@ -183,10 +183,10 @@ impl AppState {
 						Ok(())
 					})
 				}).await {
-					error!(target: "worker", "Could not update panels on database: {:?}", e);
+					error!(target: "state-manager", "Could not update panels on database: {:?}", e);
 				} else {
 					if let Err(e) = self.tx.panels.send(panels.clone()) {
-						error!(target: "worker", "Could not send panels update: {:?}", e);
+						error!(target: "state-manager", "Could not send panels update: {:?}", e);
 					}
 					self.panels = panels;
 				}
@@ -212,7 +212,7 @@ impl AppState {
 							Ok(())
 						})
 					}).await {
-						error!(target: "worker", "Could not update panels on database: {:?}", e);
+						error!(target: "state-manager", "Could not update panels on database: {:?}", e);
 					}
 				} else {
 					self.view.request_flush().await;
@@ -226,7 +226,7 @@ impl AppState {
 			BackgroundAction::UpdateMetric { metric } => {
 				let op = if metric.id == NotSet { metric.insert(db) } else { metric.update(db) };
 				if let Err(e) = op.await {
-					error!(target: "worker", "Could not update metric: {:?}", e);
+					error!(target: "state-manager", "Could not update metric: {:?}", e);
 				} else {
 					self.view.request_flush().await;
 				}
@@ -250,10 +250,10 @@ impl AppState {
 			.all(db)
 			.await?.into();
 		if let Err(e) = self.tx.points.send(self.points.clone().into()) {
-			warn!(target: "worker", "Could not send new points: {:?}", e); // TODO should be an err?
+			warn!(target: "state-manager", "Could not send new points: {:?}", e); // TODO should be an err?
 		}
 		self.last_check = Utc::now().timestamp() - *self.width.borrow();
-		info!(target: "worker", "Reloaded points");
+		info!(target: "state-manager", "Reloaded points");
 		Ok(())
 	}
 
@@ -274,7 +274,7 @@ impl AppState {
 				.all(db)
 				.await?;
 			if previous_points.len() > 0 {
-				info!(target: "worker", "Fetched {} previous points", previous_points.len());
+				info!(target: "state-manager", "Fetched {} previous points", previous_points.len());
 			}
 			previous_points.reverse(); // TODO wasteful!
 			for p in previous_points {
@@ -313,7 +313,7 @@ impl AppState {
 		self.last_check = now;
 		if changes {
 			if let Err(e) = self.tx.points.send(self.points.clone().into()) {
-				warn!(target: "worker", "Could not send changes to main thread: {:?}", e);
+				warn!(target: "state-manager", "Could not send changes to main thread: {:?}", e);
 			}
 		}
 		Ok(())
@@ -325,7 +325,7 @@ impl AppState {
 
 		let mut db = Database::connect(first_db_uri.clone()).await.unwrap();
 
-		info!(target: "worker", "Connected to '{}'", first_db_uri);
+		info!(target: "state-manager", "Connected to '{}'", first_db_uri);
 
 		while *run.borrow() {
 			now = Utc::now().timestamp();
@@ -338,38 +338,38 @@ impl AppState {
 									info!("Connected to '{}'", uri);
 									db = new_db;
 								},
-								Err(e) => error!(target: "worker", "Could not connect to db: {:?}", e),
+								Err(e) => error!(target: "state-manager", "Could not connect to db: {:?}", e),
 							};
 						},
-						None => { error!(target: "worker", "URI channel closed"); break; },
+						None => { error!(target: "state-manager", "URI channel closed"); break; },
 					}
 				},
 				res = self.op.recv() => {
 					match res {
 						Some(op) => match self.parse_op(op, &db).await {
 							Ok(()) => { },
-							Err(e) => error!(target: "worker", "Failed executing operation: {:?}", e),
+							Err(e) => error!(target: "state-manager", "Failed executing operation: {:?}", e),
 						},
-						None => { error!(target: "worker", "Operations channel closed"); break; },
+						None => { error!(target: "state-manager", "Operations channel closed"); break; },
 					}
 				}
 				res = self.flush.recv() => {
 					match res {
 						Some(()) => match self.flush_data(&db).await {
 							Ok(()) => { },
-							Err(e) => error!(target: "worker", "Could not flush away current data: {:?}", e),
+							Err(e) => error!(target: "state-manager", "Could not flush away current data: {:?}", e),
 						},
-						None => { error!(target: "worker", "Flush channel closed"); break; },
+						None => { error!(target: "state-manager", "Flush channel closed"); break; },
 					}
 				},
 				_ = sleep(self.cache_age - (now - self.last_refresh)) => {
 					if let Err(e) = self.fetch(&db).await {
-						error!(target: "worker", "Could not fetch from db: {:?}", e);
+						error!(target: "state-manager", "Could not fetch from db: {:?}", e);
 					}
 				},
 				_ = sleep(self.interval - (now - self.last_check)) => {
 					if let Err(e) = self.update_points(&db).await {
-						error!(target: "worker", "Could not update points: {:?}", e);
+						error!(target: "state-manager", "Could not update points: {:?}", e);
 					}
 				}
 			}
