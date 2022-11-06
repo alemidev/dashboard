@@ -159,56 +159,54 @@ pub fn panel_body_ui(
 	}
 
 
-	if panel.timeserie {
-		if panel.view_scroll {
-			let now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
-			p = p.include_x(now)
-					.include_x(now + (panel.view_size as f64 * 3.0))
-					.include_x(now - (panel.view_size as f64 * 60.0)); // ??? TODO
-		}
-		p = p
-			.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false))
-			.label_formatter(|name, value| {
-				if !name.is_empty() {
-					return format!(
-						"{}\nx = {}\ny = {:.1}",
-						name,
-						timestamp_to_str(value.x as i64, false, true),
-						value.y
-					);
-				} else {
-					return format!(
-						"x = {}\ny = {:.1}",
-						timestamp_to_str(value.x as i64, false, true),
-						value.y
-					);
-				}
-			})
-			.x_grid_spacer(|grid| {
-				let offset = Local::now().offset().local_minus_utc() as i64;
-				let (start, end) = grid.bounds;
-				let mut counter = (start as i64) - ((start as i64) % 3600);
-				let mut out: Vec<GridMark> = Vec::new();
-				loop {
-					counter += 3600;
-					if counter > end as i64 {
-						break;
-					}
-					if (counter + offset) % 86400 == 0 {
-						out.push(GridMark {
-							value: counter as f64,
-							step_size: 86400 as f64,
-						})
-					} else if counter % 3600 == 0 {
-						out.push(GridMark {
-							value: counter as f64,
-							step_size: 3600 as f64,
-						});
-					}
-				}
-				return out;
-			});
+	if panel.view_scroll {
+		let now = (Utc::now().timestamp() as f64) - (60.0 * panel.view_offset as f64);
+		p = p.include_x(now)
+				.include_x(now + (panel.view_size as f64 * 3.0))
+				.include_x(now - (panel.view_size as f64 * 60.0)); // ??? TODO
 	}
+	p = p
+		.x_axis_formatter(|x, _range| timestamp_to_str(x as i64, true, false))
+		.label_formatter(|name, value| {
+			if !name.is_empty() {
+				return format!(
+					"{}\nx = {}\ny = {:.1}",
+					name,
+					timestamp_to_str(value.x as i64, false, true),
+					value.y
+				);
+			} else {
+				return format!(
+					"x = {}\ny = {:.1}",
+					timestamp_to_str(value.x as i64, false, true),
+					value.y
+				);
+			}
+		})
+		.x_grid_spacer(|grid| {
+			let offset = Local::now().offset().local_minus_utc() as i64;
+			let (start, end) = grid.bounds;
+			let mut counter = (start as i64) - ((start as i64) % 3600);
+			let mut out: Vec<GridMark> = Vec::new();
+			loop {
+				counter += 3600;
+				if counter > end as i64 {
+					break;
+				}
+				if (counter + offset) % 86400 == 0 {
+					out.push(GridMark {
+						value: counter as f64,
+						step_size: 86400 as f64,
+					})
+				} else if counter % 3600 == 0 {
+					out.push(GridMark {
+						value: counter as f64,
+						step_size: 3600 as f64,
+					});
+				}
+			}
+			return out;
+		});
 
 	let mut lines : Vec<Line> = Vec::new();
 	let now = Utc::now().timestamp() as f64;

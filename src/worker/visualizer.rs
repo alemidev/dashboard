@@ -171,7 +171,6 @@ impl AppState {
 								name: Set(v.name.clone()),
 								view_scroll: Set(v.view_scroll),
 								view_size: Set(v.view_size),
-								timeserie: Set(v.timeserie),
 								height: Set(v.height),
 								position: Set(v.position),
 								reduce_view: Set(v.reduce_view),

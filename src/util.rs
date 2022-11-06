@@ -14,9 +14,8 @@ pub fn _serialize_values(values: &Vec<PlotPoint>, metric: &entities::metrics::Mo
 	let mut wtr = csv::Writer::from_writer(std::fs::File::create(path)?);
 	// DAMN!   VVVVV
 	let name = metric.name.as_str();
-	let q_x = metric.query_x.as_str();
-	let q_y = metric.query_y.as_str();
-	wtr.write_record(&[name, q_x, q_y])?;
+	let q = metric.query.as_str();
+	wtr.write_record(&[name, q, "1"])?;
 	// DAMN!   AAAAA
 	for v in values {
 		wtr.serialize(("", v.x, v.y))?;

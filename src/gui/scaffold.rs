@@ -113,7 +113,6 @@ impl EditingModel {
 						name: Set(panel.name.clone()),
 						view_scroll: Set(panel.view_scroll),
 						view_size: Set(panel.view_size),
-						timeserie: Set(panel.timeserie),
 						height: Set(panel.height),
 						position: Set(panel.position),
 						reduce_view: Set(panel.reduce_view),
@@ -150,8 +149,7 @@ impl EditingModel {
 						name: Set(metric.name.clone()),
 						source_id: Set(metric.source_id),
 						color: Set(metric.color),
-						query_x: Set(metric.query_x.clone()),
-						query_y: Set(metric.query_y.clone()),
+						query: Set(metric.query.clone()),
 						position: Set(metric.position),
 					}
 				},
@@ -251,11 +249,11 @@ pub fn popup_edit_ui(
 						ui.selectable_value(&mut metric.source_id, s.id, s.name.as_str());
 					}
 				});
-			TextEdit::singleline(&mut metric.query_x)
-				.hint_text("x")
-				.show(ui);
-			TextEdit::singleline(&mut metric.query_y)
-				.hint_text("y")
+			// TextEdit::singleline(&mut metric.query_x)
+			// 	.hint_text("x")
+			// 	.show(ui);
+			TextEdit::singleline(&mut metric.query)
+				.hint_text("query")
 				.show(ui);
 		},
 	}
@@ -292,8 +290,12 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 			app.refresh_data();
 		}
 		ui.separator();
+		let last_edit = app.edit; // replace panels when going into edit mode
 		ui.checkbox(&mut app.edit, "edit");
 		if app.edit {
+			if !last_edit { // TODO kinda cheap fix having it down here
+				app.panels = app.view.panels.borrow().clone();
+			}
 			if ui.button("reset").clicked() {
 				app.panels = app.view.panels.borrow().clone();
 			}

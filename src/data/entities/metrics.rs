@@ -13,8 +13,7 @@ pub struct Model {
 	pub id: i64,
 	pub name: String,
 	pub source_id: i64,
-	pub query_x: String,
-	pub query_y: String,
+	pub query: String,
 	pub color: i32,
 	pub position: i32,
 }
@@ -54,17 +53,10 @@ impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
 	pub fn extract(&self, value: &serde_json::Value) -> Result<PlotPoint, FetchError> {
-		let x: f64;
-		if self.query_x.len() > 0 {
-			x = jql::walker(value, self.query_x.as_str())?
-				.as_f64()
-				.ok_or(FetchError::JQLError("X query is null".to_string()))?; // TODO what if it's given to us as a string?
-		} else {
-			x = Utc::now().timestamp() as f64;
-		}
-		let y = jql::walker(value, self.query_y.as_str())?
+		let x = Utc::now().timestamp() as f64;
+		let y = jql::walker(value, self.query.as_str())?
 			.as_f64()
-			.ok_or(FetchError::JQLError("Y query is null".to_string()))?;
+			.ok_or(FetchError::JQLError("query result is null".to_string()))?;
 		Ok(PlotPoint { x, y })
 	}
 }
@@ -75,8 +67,7 @@ impl Default for Model {
 			id: 0,
 			name: "".into(),
 			source_id: 0,
-			query_x: "".into(),
-			query_y: "".into(),
+			query: "".into(),
 			color: 0,
 			position: 0,
 		}
