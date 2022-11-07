@@ -16,21 +16,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 csv = "1.1"
 jql = { version = "4", default-features = false }
-rfd = "0.9"
 eframe = { version = "0.19", features = ["persistence"] }
-tokio = { version = "1", features = ["full"] }
-clap = { version = "4", features = ["derive"] }
 futures = "0.3"
-sea-orm = { version = "0.10", features = [ "runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres", "macros" ] }
 reqwest = { version = "0.11", features = ["json"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+sea-orm = { version = "0.10", features = [ "runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres", "macros" ] }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"
 ctrlc = "3.2.3"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-tracing-wasm = "0.2"
 
 [profile.dev.package."*"]
 opt-level = 3

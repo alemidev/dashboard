@@ -52,21 +52,12 @@ enum Mode {
 	},
 	/// Run as foreground user interface displaying collected data
 	GUI {
-
+		/// Immediately connect to this database on startup
+		#[arg(short, long)]
+		db_uri: Option<String>,
 	},
 }
 
-// When compiling for web:
-#[cfg(target_arch = "wasm32")]
-fn setup_tracing(_layer: Option<InternalLoggerLayer>) {
-	// Make sure panics are logged using `console.error`.
-	console_error_panic_hook::set_once();
-	// Redirect tracing to console.log and friends:
-	tracing_wasm::set_as_global_default();
-}
-
-// When compiling natively:
-#[cfg(not(target_arch = "wasm32"))]
 fn setup_tracing(layer: Option<InternalLoggerLayer>) {
 	let sub = tracing_subscriber::registry()
 		.with(LevelFilter::INFO)
@@ -146,7 +137,7 @@ fn main() {
 			worker.join().expect("Failed joining worker thread");
 		},
 
-		Mode::GUI { } => {
+		Mode::GUI { db_uri } => {
 			let (uri_tx, uri_rx) = mpsc::channel(10);
 			let (width_tx, width_rx) = watch::channel(0);
 
@@ -226,6 +217,7 @@ fn main() {
 						Box::new(
 							App::new(
 								cc,
+								db_uri,
 								uri_tx,
 								args.interval as i64,
 								view,

@@ -44,6 +44,7 @@ pub struct App {
 impl App {
 	pub fn new(
 		_cc: &eframe::CreationContext,
+		initial_uri: Option<String>,
 		db_uri_tx: mpsc::Sender<String>,
 		interval: i64,
 		view: AppStateView,
@@ -51,9 +52,14 @@ impl App {
 		logger_view: watch::Receiver<Vec<String>>,
 	) -> Self {
 		let panels = view.panels.borrow().clone();
+		if let Some(initial_uri) = &initial_uri {
+			if let Err(e) = db_uri_tx.blocking_send(initial_uri.clone()) {
+				error!(target: "app", "Could not send initial uri: {:?}", e);
+			}
+		}
 		Self {
 			db_uri_tx, interval, panels, width_tx, view, logger_view,
-			db_uri: "".into(),
+			db_uri: initial_uri.unwrap_or("".into()),
 			buffer_source: entities::sources::Model::default(),
 			buffer_metric: entities::metrics::Model::default(),
 			last_redraw: 0,
