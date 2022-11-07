@@ -296,14 +296,15 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 			if !last_edit { // TODO kinda cheap fix having it down here
 				app.panels = app.view.panels.borrow().clone();
 			}
+			if ui.button("+").clicked() {
+				app.editing.push(entities::panels::Model::default().into());
+			}
 			if ui.button("reset").clicked() {
 				app.panels = app.view.panels.borrow().clone();
 			}
 			if ui.button("save").clicked() {
 				app.save_all_panels();
-			}
-			if ui.button("+").clicked() {
-				app.editing.push(entities::panels::Model::default().into());
+				app.edit = false;
 			}
 		}
 		ui.separator();

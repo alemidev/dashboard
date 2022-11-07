@@ -23,17 +23,17 @@ pub fn metric_edit_ui(ui: &mut Ui, metric: &entities::metrics::Model) {
 	ui.horizontal(|ui| {
 		// ui.color_edit_button_srgba(&mut unpack_color(metric.color));
 		color_square(ui, unpack_color(metric.color));
-		let available = ui.available_width() - 79.0;
+		let unit = (ui.available_width() - 65.0) / 5.0;
 		TextEdit::singleline(&mut name)
-			.desired_width(available / 2.0)
+			.desired_width(unit * 2.0)
 			.interactive(false)
 			.hint_text("name")
 			.show(ui);
 		ui.separator();
 		TextEdit::singleline(&mut query)
-			.desired_width(available / 2.0)
+			.desired_width(unit * 3.0)
 			.interactive(false)
-			.hint_text("y")
+			.hint_text("query")
 			.show(ui);
 	});
 }
