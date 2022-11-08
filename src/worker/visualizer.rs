@@ -124,6 +124,7 @@ impl AppState {
 		// TODO parallelize all this stuff
 		self.panels = entities::panels::Entity::find()
 			.order_by(entities::panels::Column::Position, Order::Asc)
+			.order_by(entities::panels::Column::Id, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.panels.send(self.panels.clone()) { 
 			error!(target: "state-manager", "Could not send panels update: {:?}", e);
@@ -131,6 +132,7 @@ impl AppState {
 
 		self.sources = entities::sources::Entity::find()
 			.order_by(entities::sources::Column::Position, Order::Asc)
+			.order_by(entities::sources::Column::Id, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.sources.send(self.sources.clone()) {
 			error!(target: "state-manager", "Could not send sources update: {:?}", e);
@@ -138,6 +140,8 @@ impl AppState {
 
 		self.metrics = entities::metrics::Entity::find()
 			.order_by(entities::metrics::Column::Position, Order::Asc)
+			.order_by(entities::metrics::Column::SourceId, Order::Asc)
+			.order_by(entities::metrics::Column::Id, Order::Asc)
 			.all(db).await?;
 		if let Err(e) = self.tx.metrics.send(self.metrics.clone()) {
 			error!(target: "state-manager", "Could not send metrics update: {:?}", e);
