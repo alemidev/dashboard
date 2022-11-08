@@ -15,7 +15,7 @@ use scaffold::{
 	// confirmation_popup_delete_metric, confirmation_popup_delete_source, footer,
 	header,
 };
-use source::source_panel;
+use source::source_panel_ui;
 
 use self::scaffold::{footer, EditingModel, popup_edit_ui};
 
@@ -112,7 +112,7 @@ impl eframe::App for App {
 			SidePanel::left("sources-bar")
 				.width_range(280.0..=800.0)
 				.default_width(if self.edit { 450.0 } else { 330.0 })
-				.show(ctx, |ui| source_panel(self, ui));
+				.show(ctx, |ui| source_panel_ui(self, ui));
 		}
 
 		CentralPanel::default().show(ctx, |ui| {

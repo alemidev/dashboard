@@ -25,6 +25,7 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 					panel_title_ui_edit(ui, &mut panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
 				})
 				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+				ui.separator();
 			}
 		} else {
 			for panel in app.view.panels.borrow().iter() {
@@ -34,58 +35,32 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 					true,
 				)
 				.show_header(ui, |ui| {
-					panel_title_ui(ui, &panel);
+					panel_title_ui(ui, &panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
 				})
 				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+				ui.separator();
 			}
 		}
 	});
 }
 
-pub fn _panel_edit_inline_ui(_ui: &mut Ui, _panel: &entities::panels::Model) {
-	// TextEdit::singleline(&mut panel.name)
-	// 	.hint_text("name")
-	// 	.desired_width(100.0)
-	// 	.show(ui);
-}
-
 pub fn panel_title_ui(
 	ui: &mut Ui,
 	panel: &entities::panels::Model,
+	editing: &mut Vec<EditingModel>,
+	metrics: &Vec<entities::metrics::Model>,
+	panel_metric: &Vec<entities::panel_metric::Model>,
 ) { // TODO make edit UI in separate func
 	ui.horizontal(|ui| {
+		ui.separator();
+		if ui.small_button("#").clicked() {
+			// TODO don't add duplicates
+			editing.push(
+				EditingModel::make_edit_panel(panel.clone(), metrics, panel_metric)
+			);
+		}
+		ui.separator();
 		ui.heading(panel.name.as_str());
-		ui.with_layout(Layout::right_to_left(eframe::emath::Align::Min), |ui| {
-			ui.horizontal(|_ui| {
-				// TODO just show these, with no editing
-				// ui.toggle_value(&mut panel.view_scroll, "🔒");
-				// ui.separator();
-				// ui.add(
-				// 	DragValue::new(&mut panel.view_size)
-				// 		.speed(10)
-				// 		.suffix(" min")
-				// 		.clamp_range(0..=2147483647i32),
-				// );
-				// ui.separator();
-				// ui.add(
-				// 	DragValue::new(&mut panel.view_offset)
-				// 		.speed(10)
-				// 		.suffix(" min")
-				// 		.clamp_range(0..=2147483647i32),
-				// );
-				// ui.separator();
-				// if panel.reduce_view {
-				// 	ui.add(
-				// 		DragValue::new(&mut panel.view_chunks)
-				// 			.speed(1)
-				// 			.prefix("x")
-				// 			.clamp_range(1..=1000), // TODO allow to average larger spans maybe?
-				// 	);
-				// 	ui.toggle_value(&mut panel.average_view, "avg");
-				// }
-				// ui.toggle_value(&mut panel.reduce_view, "reduce");
-			});
-		});
 	});
 }
 
@@ -97,7 +72,6 @@ pub fn panel_title_ui_edit(
 	panel_metric: &Vec<entities::panel_metric::Model>,
 ) { // TODO make edit UI in separate func
 	ui.horizontal(|ui| {
-		ui.heading(panel.name.as_str());
 		ui.separator();
 		if ui.small_button("#").clicked() {
 			// TODO don't add duplicates
@@ -106,7 +80,7 @@ pub fn panel_title_ui_edit(
 			);
 		}
 		ui.separator();
-		ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
+		ui.heading(panel.name.as_str());
 		//ui.separator();
 		//ui.checkbox(&mut panel.timeserie, "timeserie");
 		ui.with_layout(Layout::right_to_left(eframe::emath::Align::Min), |ui| {
@@ -137,6 +111,8 @@ pub fn panel_title_ui_edit(
 					ui.toggle_value(&mut panel.average_view, "avg");
 				}
 				ui.toggle_value(&mut panel.reduce_view, "reduce");
+				ui.separator();
+				ui.add(Slider::new(&mut panel.height, 0..=500).text("height"));
 			});
 		});
 	});
@@ -218,7 +194,6 @@ pub fn panel_body_ui(
 	let metric_ids : Vec<i64> = panel_metric.iter().filter(|x| x.panel_id == panel.id).map(|x| x.metric_id).collect();
 	for metric in metrics {
 		if metric_ids.contains(&metric.id) {
-			// let values = metric.values(min_x, max_x, chunk_size, panel.average_view); 
 			let mut values : Vec<[f64;2]> = points
 				.iter()
 				.filter(|v| v.metric_id == metric.id)
@@ -233,13 +208,6 @@ pub fn panel_body_ui(
 						if x.len() > 0 { x[x.len()-1] } else { [0.0, 0.0 ]}
 					}).collect();
 			}
-			// if !panel.timeserie && panel.view_scroll && values.len() > 0 {
-			// 	let l = values.len() - 1;
-			// 	p = p.include_x(values[0].x)
-			// 		.include_x(values[l].x)
-			// 		.include_y(values[0].y)
-			// 		.include_y(values[l].y);
-			// }
 			lines.push(
 				Line::new(values)
 					.name(metric.name.as_str())

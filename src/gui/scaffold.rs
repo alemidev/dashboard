@@ -205,12 +205,42 @@ pub fn popup_edit_ui(
 				ui.label("position");
 				ui.add(DragValue::new(&mut panel.position).clamp_range(0..=1000));
 			});
-			for (i, metric) in metrics.iter().enumerate() {
-				if i >= opts.len() { // TODO safe but jank: always starts with all off
-					opts.push(false);
+			ui.horizontal(|ui| {
+				ui.add(
+					DragValue::new(&mut panel.view_size)
+						.speed(10)
+						.suffix(" min")
+						.clamp_range(0..=2147483647i32),
+				);
+				ui.separator();
+				ui.add(
+					DragValue::new(&mut panel.view_offset)
+						.speed(10)
+						.suffix(" min")
+						.clamp_range(0..=2147483647i32),
+				);
+			});
+			ui.horizontal(|ui| {
+				ui.toggle_value(&mut panel.reduce_view, "reduce");
+				if panel.reduce_view {
+					ui.add(
+						DragValue::new(&mut panel.view_chunks)
+						.speed(1)
+						.suffix("×")
+						.clamp_range(1..=1000)
+					);
+					ui.toggle_value(&mut panel.average_view, "avg");
 				}
-				ui.checkbox(&mut opts[i], &metric.name);
-			}
+			});
+			ui.label("metrics:");
+			ui.group(|ui| {
+				for (i, metric) in metrics.iter().enumerate() {
+					if i >= opts.len() { // TODO safe but jank: always starts with all off
+						opts.push(false);
+					}
+					ui.checkbox(&mut opts[i], &metric.name);
+				}
+			});
 		},
 		EditingModelType::EditingSource { source } => {
 			ui.horizontal(|ui| {
@@ -249,9 +279,6 @@ pub fn popup_edit_ui(
 						ui.selectable_value(&mut metric.source_id, s.id, s.name.as_str());
 					}
 				});
-			// TextEdit::singleline(&mut metric.query_x)
-			// 	.hint_text("x")
-			// 	.show(ui);
 			TextEdit::singleline(&mut metric.query)
 				.hint_text("query")
 				.show(ui);
@@ -308,18 +335,6 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 			}
 		}
 		ui.separator();
-		// ui.separator();
-		// ui.checkbox(&mut app.edit, "edit");
-		// if app.edit {
-		// 	ui.label("+ panel");
-		// 	panel_edit_inline_ui(ui, &mut app.buffer_panel);
-		// 	if ui.button("add").clicked() {
-		// 		// if let Err(e) = app.data.add_panel(&app.input_panel) {
-		// 		// 	error!(target: "ui", "Failed to add panel: {:?}", e);
-		// 		// };
-		// 	}
-		// 	ui.separator();
-		// }
 		ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
 			ui.horizontal(|ui| {
 				if ui.small_button("×").clicked() {

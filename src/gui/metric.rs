@@ -17,7 +17,7 @@ fn color_square(ui: &mut Ui, color:Color32) {
 	}
 }
 
-pub fn metric_edit_ui(ui: &mut Ui, metric: &entities::metrics::Model) {
+pub fn metric_line_ui(ui: &mut Ui, metric: &entities::metrics::Model) {
 	let mut name = metric.name.clone();
 	let mut query = metric.query.clone();
 	ui.horizontal(|ui| {
