@@ -74,14 +74,19 @@ pub async fn surveyor_loop(
 							error!(target: "surveyor", "[{}] Failed setting last_update ({:?}) for source {:?} but successfully fetched '{}', aborting", index, e, source_clone, res);
 							return;
 						}
+						let now = Utc::now().timestamp() as f64;
 						for metric in metrics_snapshot.iter().filter(|x| source_clone.id == x.source_id) {
 							match metric.extract(&res) {
-								Ok(v) => {
-									if let Err(e) = entities::points::Entity::insert(
-										entities::points::ActiveModel {
-											id: NotSet, metric_id: Set(metric.id), x: Set(v.x), y: Set(v.y),
-									}).exec(&db_clone).await {
-										error!(target: "surveyor", "[{}] Could not insert record {:?} : {:?}", index, v, e);
+								// note that Err and None mean different things: Err for broken queries, None for
+								// missing values. Only first one is reported
+								Ok(value) => {
+									if let Some(v) = value {
+										if let Err(e) = entities::points::Entity::insert(
+											entities::points::ActiveModel {
+												id: NotSet, metric_id: Set(metric.id), x: Set(now), y: Set(v),
+										}).exec(&db_clone).await {
+											error!(target: "surveyor", "[{}] Could not insert record ({},{}) : {:?}", index, now, v, e);
+										}
 									}
 								},
 								Err(e) => error!(target: "surveyor", "[{}] Failed extracting '{}' from {}: {:?}", index, metric.name, source_clone.name, e),

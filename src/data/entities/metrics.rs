@@ -52,12 +52,8 @@ impl Related<super::panels::Entity> for Entity {
 impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
-	pub fn extract(&self, value: &serde_json::Value) -> Result<PlotPoint, FetchError> {
-		let x = Utc::now().timestamp() as f64;
-		let y = jql::walker(value, self.query.as_str())?
-			.as_f64()
-			.ok_or(FetchError::JQLError("query result is null".to_string()))?;
-		Ok(PlotPoint { x, y })
+	pub fn extract(&self, value: &serde_json::Value) -> Result<Option<f64>, FetchError> {
+		Ok(jql::walker(value, self.query.as_str())?.as_f64())
 	}
 }
 
