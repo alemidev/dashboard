@@ -313,8 +313,7 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 			.hint_text("db uri")
 			.show(ui);
 		if ui.button("connect").clicked() {
-			app.db_uri_tx.blocking_send(app.db_uri.clone()).unwrap(); // TODO!!!
-			app.refresh_data();
+			app.update_db_uri();
 		}
 		ui.separator();
 		let last_edit = app.edit; // replace panels when going into edit mode

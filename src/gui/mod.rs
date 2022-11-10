@@ -71,24 +71,41 @@ impl App {
 		}
 	}
 
-	pub fn save_all_panels(&self) {
-		if let Err(e) = self.view.op.blocking_send(
-			crate::worker::visualizer::BackgroundAction::UpdateAllPanels { panels: self.panels.clone() }
-		) {
-			error!(target: "app", "Could not save panels: {:?}", e);
-		}
+	pub fn save_all_panels(&self) { // TODO can probably remove this and invoke op() directly
+		let msg = BackgroundAction::UpdateAllPanels { panels: self.panels.clone() };
+		self.op(msg);
 	}
 
 	pub fn refresh_data(&self) {
-		if let Err(e) = self.view.flush.blocking_send(()) {
-			error!(target: "app", "Could not request flush: {:?}", e);
-		}
+		let flush_clone = self.view.flush.clone();
+		std::thread::spawn(move || {
+			if let Err(e) = flush_clone.blocking_send(()) {
+				error!(target: "app-background", "Could not request flush: {:?}", e);
+			}
+		});
 	}
 
 	pub fn op(&self, op: BackgroundAction) {
-		if let Err(e) = self.view.op.blocking_send(op) {
-			error!(target: "app", "Could not send operation: {:?}", e);
-		}
+		let op_clone = self.view.op.clone();
+		std::thread::spawn(move || {
+			if let Err(e) = op_clone.blocking_send(op) {
+				error!(target: "app-background", "Could not send operation: {:?}", e);
+			}
+		});
+	}
+
+	fn update_db_uri(&self) {
+		let db_uri_clone = self.db_uri_tx.clone();
+		let db_uri_str = self.db_uri.clone();
+		let flush_clone = self.view.flush.clone();
+		std::thread::spawn(move || {
+			if let Err(e) = db_uri_clone.blocking_send(db_uri_str) {
+				error!(target: "app-background", "Could not send new db uri : {:?}", e);
+			}
+			if let Err(e) = flush_clone.blocking_send(()) {
+				error!(target: "app-background", "Could not request data flush : {:?}", e);
+			}
+		});
 	}
 }
 
