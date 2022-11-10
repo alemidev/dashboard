@@ -11,7 +11,9 @@ use crate::data::entities;
 use super::scaffold::EditingModel;
 
 pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
+	let panel_metric = app.view.panel_metric.borrow();
 	let metrics = app.view.metrics.borrow();
+	let points = app.view.points.borrow();
 	ScrollArea::vertical().show(ui, |ui| {
 		ui.separator();
 		if app.edit {
@@ -22,9 +24,9 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 					true,
 				)
 				.show_header(ui, |ui| {
-					panel_title_ui_edit(ui, &mut panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
+					panel_title_ui_edit(ui, &mut panel, &mut app.editing, &metrics, &panel_metric);
 				})
-				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+				.body(|ui| panel_body_ui(ui, panel, &metrics, &points, &panel_metric));
 				ui.separator();
 			}
 		} else {
@@ -35,9 +37,9 @@ pub fn main_content(app: &mut App, ctx: &Context, ui: &mut Ui) {
 					true,
 				)
 				.show_header(ui, |ui| {
-					panel_title_ui(ui, &panel, &mut app.editing, &app.view.metrics.borrow(), &app.view.panel_metric.borrow());
+					panel_title_ui(ui, &panel, &mut app.editing, &metrics, &panel_metric);
 				})
-				.body(|ui| panel_body_ui(ui, panel, &metrics, &app.view.points.borrow(), &app.view.panel_metric.borrow()));
+				.body(|ui| panel_body_ui(ui, panel, &metrics, &points, &panel_metric));
 				ui.separator();
 			}
 		}
