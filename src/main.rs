@@ -3,6 +3,8 @@ mod data;
 mod util;
 mod worker;
 
+use std::sync::Arc;
+
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::prelude::*;
 use tracing::{info, error};
@@ -38,8 +40,12 @@ struct CliArgs {
 	cache_time: u64,
 
 	/// How many log lines to keep in memory
-	#[arg(short, long, default_value_t = 1000)]
+	#[arg(long, default_value_t = 1000)]
 	log_size: u64,
+
+
+	#[arg(long)]
+	log_file: Option<String>,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -58,17 +64,21 @@ enum Mode {
 	},
 }
 
-fn setup_tracing(layer: Option<InternalLoggerLayer>) {
-	let sub = tracing_subscriber::registry()
+fn setup_tracing(layer: Option<InternalLoggerLayer>, log_to_file:Option<String>) {
+	let file_layer = if let Some(path) = log_to_file {
+		let file = std::fs::File::create(path).expect("Cannot open requested log file for writing");
+		Some(tracing_subscriber::fmt::layer().with_ansi(false).with_writer(Arc::new(file)))
+	} else {
+		None
+	};
+
+	tracing_subscriber::registry()
 		.with(LevelFilter::INFO)
 		.with(filter_fn(|x| x.target() != "sqlx::query"))
-		.with(tracing_subscriber::fmt::Layer::new());
-
-	if let Some(layer) = layer {
-		sub.with(layer).init();
-	} else {
-		sub.init();
-	}
+		.with(tracing_subscriber::fmt::layer()) // stdout log
+		.with(file_layer)
+		.with(layer)
+		.init();
 }
 
 fn main() {
@@ -81,7 +91,7 @@ fn main() {
 
 	match args.mode {
 		Mode::Worker { db_uris } => {
-			setup_tracing(None);
+			setup_tracing(None, args.log_file);
 
 			let worker = std::thread::spawn(move || {
 				tokio::runtime::Builder::new_multi_thread()
@@ -144,7 +154,7 @@ fn main() {
 			let logger = InternalLogger::new(args.log_size as usize);
 			let logger_view = logger.view();
 
-			setup_tracing(Some(logger.layer()));
+			setup_tracing(Some(logger.layer()), args.log_file);
 
 			let state = match AppState::new(
 				width_rx,
