@@ -320,7 +320,10 @@ impl AppState {
 
 	pub async fn worker(mut self, run:watch::Receiver<bool>) {
 		let mut now;
-		let first_db_uri = self.db_uri.recv().await.unwrap();
+		let Some(first_db_uri) = self.db_uri.recv().await else {
+			warn!(target: "state-manager", "No initial database URI, skipping first connection");
+			return;
+		};
 
 		let mut db = Database::connect(first_db_uri.clone()).await.unwrap();
 
