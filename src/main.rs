@@ -178,15 +178,23 @@ fn main() {
 					.block_on(async {
 						let mut jobs = vec![];
 
-						let run_rx_clone_clone = run_rx.clone();
+						let mut run_rx_clone_clone = run_rx.clone();
 
 						jobs.push(
 							tokio::spawn(async move {
-								while *run_rx_clone_clone.borrow() {
-									if let Some(ctx) = &*ctx_rx.borrow() {
-										ctx.request_repaint();
+								loop {
+									// TODO probably state-worker can request a repaint directly, if we pass the
+									// channel used to receive ctx
+									tokio::select!{ // block on `run` too so that application can exit quickly
+										_ = run_rx_clone_clone.changed() => {
+											if ! *run_rx_clone_clone.borrow() { break; }
+										},
+										_ = tokio::time::sleep(std::time::Duration::from_secs(args.interval)) => {
+											if let Some(ctx) = &*ctx_rx.borrow() {
+												ctx.request_repaint();
+											}
+										},
 									}
-									tokio::time::sleep(std::time::Duration::from_secs(args.interval)).await;
 								}
 							})
 						);
