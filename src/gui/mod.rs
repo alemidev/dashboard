@@ -23,6 +23,7 @@ pub struct App {
 	view: AppStateView,
 	db_uri: String,
 	db_uri_tx: mpsc::Sender<String>,
+	last_db_uri: String,
 	interval: i64,
 	last_redraw: i64,
 
@@ -59,6 +60,7 @@ impl App {
 		}
 		Self {
 			db_uri_tx, interval, panels, width_tx, view, logger_view,
+			last_db_uri: "[disconnected]".into(),
 			db_uri: initial_uri.unwrap_or("".into()),
 			buffer_source: entities::sources::Model::default(),
 			buffer_metric: entities::metrics::Model::default(),
@@ -116,7 +118,7 @@ impl eframe::App for App {
 		});
 
 		TopBottomPanel::bottom("footer").show(ctx, |ui| {
-			footer(ctx, ui, self.logger_view.clone(), self.db_uri.clone(), self.view.points.borrow().len());
+			footer(ctx, ui, self.logger_view.clone(), self.last_db_uri.clone(), self.view.points.borrow().len());
 		});
 
 		for m in self.editing.iter_mut() {

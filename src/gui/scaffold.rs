@@ -314,6 +314,7 @@ pub fn header(app: &mut App, ui: &mut Ui, frame: &mut Frame) {
 			.show(ui);
 		if ui.button("connect").clicked() {
 			app.update_db_uri();
+			app.last_db_uri = app.db_uri.split("/").last().unwrap_or("").to_string();
 		}
 		ui.separator();
 		let last_edit = app.edit; // replace panels when going into edit mode
